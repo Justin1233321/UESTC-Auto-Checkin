@@ -4,6 +4,10 @@
 
 跑在 GitHub Actions 的免费 runner 上，每天北京时间 21:20 自动执行。
 
+> 本项目基于 [fanrea/uestc-checkin-actions-public](https://github.com/fanrea/uestc-checkin-actions-public)
+> 与 [richard297779/UESTC-MoonCheck](https://github.com/richard297779/UESTC-MoonCheck) 的工作，
+> 把后者的应用宝协议实现移植为纯 Python。详见[致谢与来源](#致谢与来源)。
+
 ---
 
 ## 它是怎么做到的
@@ -264,12 +268,51 @@ tests/
 
 ---
 
-## 协议实现来源
+## 致谢与来源
 
-协议栈移植自 [UESTC-MoonCheck](https://github.com/richard297779/UESTC-MoonCheck)（MIT）的固件实现，
-其本身移植自 `moon-uestc` 的 Python 参考实现，并与 YYB-Go-Enhanced 的 Go 参考逐字节一致。
+本项目是站在三个项目肩上做的，请注意各自的角色和许可。
 
-本项目的贡献是把这套协议用纯 Python 重写，使其能脱离硬件运行在云端。
-正确性由 38 项黄金向量逐字节对拍保证，MMTLS 握手、ManualAuth、0-RTT 取码均已在真实服务器验证。
+### [fanrea/uestc-checkin-actions-public](https://github.com/fanrea/uestc-checkin-actions-public) — 起点
 
-MIT License。
+这是本项目最初的起点。它确立了「微信 code → Ticket → 打卡」这条链路，
+以及「Windows 采集 + 云端重放」的整体架构，并提供了学校侧的字段契约、
+`checkin-request-profile` 配置格式、以及那套脱敏日志的约定（只输出阶段、
+HTTP 状态、整数业务码，不输出凭据与位置）。
+
+本项目沿用了它的学校侧接口认知和隐私处理思路，但**鉴权方式完全不同**：
+它依赖注入 Windows 微信进程抓取会话（绑定微信 4.1.15.56 / RadiumWMPF 25799，
+需 Frida 注入原生偏移），本项目改用应用宝开放协议，因此不再需要 Windows 微信、
+不再绑定微信版本、也不再受微信反调试影响。
+
+如果你只想在 Windows 上跑、且微信版本恰好匹配，可以优先考虑原项目。
+
+### [richard297779/UESTC-MoonCheck](https://github.com/richard297779/UESTC-MoonCheck)（MIT） — 协议实现
+
+本项目 `uestc_wx/` 下的协议栈（`wire.py` / `mmtls.py` / `crypto.py` /
+`dns.py` / `yyb.py`）移植自该项目的 ESP32 C++ 固件实现。
+它首次证明了这个关键洞察：`wx.login` code 不必由微信运行时产生，
+应用宝 PC 端作为腾讯官方运营的非微信运行时，同样能签发。
+
+它同时也提供了本项目最重要的验证手段：`golden_vectors.h` 与
+`aesgcm_vectors.h` 里的测试向量，让协议移植可以离线逐字节对拍，
+而不必等到联网才发现握手错误。
+
+### [moon-uestc](https://github.com/MioYiSama/moon-uestc) 与 YYB-Go-Enhanced
+
+MoonCheck 的协议实现本身移植自 `moon-uestc`，并与 `YYB-Go-Enhanced` 的 Go 参考逐字节一致。
+本项目是这条移植链的第三环：C++ → Python。
+
+### 本项目的贡献
+
+把上述协议用纯 Python 重写，并补齐了脱离硬件运行所需的部分：
+
+- 38 项黄金向量对拍测试，保证移植正确性
+- 真实服务器验证：MMTLS 握手、ManualAuth、0-RTT 取码、两段式换票
+- 两段式换票（`check-bind` + `checkin-ticket`）与入口票据的完整实现
+- 凭据轮换的持久化（回写 GitHub Secret），这是无状态 runner 长期运行的前提
+- 配置向导与面向非开发者的文档
+
+### 许可
+
+本项目与原项目均为 MIT License。
+
