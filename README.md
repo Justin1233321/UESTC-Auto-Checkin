@@ -39,7 +39,7 @@
 
 ### 第 1 步：在自己电脑上装依赖
 
-需要 Python 3.10+。在项目根目录：
+需要 Python 3.10+。**打开终端**（Windows 用 PowerShell，macOS 用 Terminal），`cd` 到项目根目录后运行：
 
 ```powershell
 # Windows PowerShell
@@ -51,7 +51,7 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 
-先跑一次离线自检，确认协议实现正常（38 项，不联网、不需要账号）：
+先跑一次离线自检，确认协议实现正常（38 项，不联网、不需要账号）。**继续在终端里运行**：
 
 ```powershell
 .\.venv\Scripts\python.exe -m uestc_wx.cli selftest
@@ -60,6 +60,8 @@ python3 -m venv .venv
 看到 `OK` 就对了。
 
 ### 第 2 步：扫码拿微信授权凭据
+
+> **关于「终端」：** 本文中凡是 `powershell` 代码块，都要在你自己电脑上打开终端（Windows 用 PowerShell，macOS 用 Terminal）运行，而不是在浏览器里。运行前先 `cd` 到项目根目录。需要点网页的地方会明确写「浏览器」或「去 Actions 页面」。
 
 在**电脑浏览器**打开下面这个地址（注意核对域名是 `open.weixin.qq.com`，协议是 HTTPS）：
 
@@ -78,7 +80,7 @@ https://open.weixin.qq.com/connect/qrconnect?appid=wxd44977328b36e647&redirect_u
 
 **复制完立刻关掉这个授权页面。** 同一组凭据只能有一个客户端保活，页面开着会和后续的自动任务互相挤掉线。
 
-用向导生成配置文件（把 `owXXXX` 等替换成你复制的真实值）：
+用向导生成配置文件。**回到终端运行**，把 `owXXXX` 等替换成你刚才复制的真实值：
 
 ```powershell
 .\.venv\Scripts\python.exe tools/setup_wizard.py creds `
@@ -90,6 +92,8 @@ https://open.weixin.qq.com/connect/qrconnect?appid=wxd44977328b36e647&redirect_u
 
 它只显示长度和文件名，不回显凭据内容。
 
+> **向导是干什么的：** `tools/setup_wizard.py` 是配置助手，只在准备阶段用一次，打卡运行时不需要它。它解决三个手工容易出错的地方：① `expires_in` 是剩余秒数，它会自动换算成绝对时间；② 坐标会算出距打卡点中心的距离，超出围栏当场告警；③ Secret 内容导成干净的 txt，避免手抄漏字符。你可以跳过它纯手工写 JSON，但上述三个坑要自己留意。
+
 ### 第 3 步：填你的宿舍坐标
 
 **必须在宿舍现场取。** 围栏半径约 150 米，站在宿舍里取的值才可靠。
@@ -100,7 +104,7 @@ https://open.weixin.qq.com/connect/qrconnect?appid=wxd44977328b36e647&redirect_u
 2. 过滤框输入 `reverse`
 3. 找到 `map/reverse?lat=...&lng=...` 这条请求，URL 里的 `lat` 和 `lng` 就是你的坐标
 
-然后：
+取到坐标后，**在终端里运行**（把经纬度换成你自己的）：
 
 ```powershell
 .\.venv\Scripts\python.exe tools/setup_wizard.py profile `
@@ -111,7 +115,7 @@ https://open.weixin.qq.com/connect/qrconnect?appid=wxd44977328b36e647&redirect_u
 
 ### 第 4 步：配 GitHub Secrets
 
-先验证一遍配置（`--online` 会真的访问应用宝接口，确认凭据可用）：
+先验证一遍配置。**在终端里运行**（`--online` 会真的访问应用宝接口，确认凭据可用）：
 
 ```powershell
 .\.venv\Scripts\python.exe tools/setup_wizard.py verify --online
@@ -119,7 +123,7 @@ https://open.weixin.qq.com/connect/qrconnect?appid=wxd44977328b36e647&redirect_u
 
 看到 `"ok": true` 就好。
 
-然后导出可直接粘贴的文本：
+然后导出可直接粘贴的文本。**继续在终端里运行**：
 
 ```powershell
 .\.venv\Scripts\python.exe tools/setup_wizard.py export
