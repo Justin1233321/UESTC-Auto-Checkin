@@ -29,9 +29,9 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -42,6 +42,8 @@ jobs:
         run: python -m uestc_wx.cli selftest
 
       - name: Materialize secrets
+        # validate 不需要凭据，允许在配置 Secrets 之前先验证代码
+        if: (github.event.inputs.mode || 'submit') != 'validate'
         env:
           YYB_CREDENTIALS_JSON: ${{ secrets.YYB_CREDENTIALS_JSON }}
           CHECKIN_PROFILE_JSON: ${{ secrets.CHECKIN_PROFILE_JSON }}
@@ -55,7 +57,9 @@ jobs:
           required = ("YYB_CREDENTIALS_JSON", "CHECKIN_PROFILE_JSON")
           missing = [name for name in required if not os.environ.get(name)]
           if missing:
-              raise SystemExit("Missing secrets: " + ", ".join(missing))
+              raise SystemExit(
+                  "Missing secrets: " + ", ".join(missing) +
+                  " (Settings -> Secrets and variables -> Actions)")
           (private / "creds.json").write_text(
               os.environ["YYB_CREDENTIALS_JSON"], encoding="utf-8")
           (private / "profile.json").write_text(
@@ -74,7 +78,8 @@ jobs:
           case "$MODE" in
             validate)
               echo "validate: 离线自检已通过，未发起平台请求"
-              exit 0
+              echo "### validate 通过" >> "$GITHUB_STEP_SUMMARY"
+              echo "38 项黄金向量自检全部通过，未访问任何平台接口。" >> "$GITHUB_STEP_SUMMARY"
               ;;
             ticket)
               python -m uestc_wx.cli ticket --creds .private/creds.json
@@ -94,7 +99,7 @@ jobs:
           esac
 
       - name: Persist rotated credentials
-        if: always()
+        if: always() && (github.event.inputs.mode || 'submit') != 'validate'
         env:
           GH_TOKEN: ${{ secrets.CREDENTIALS_PAT }}
         run: python -m uestc_wx.persist || echo "persist step failed (non-fatal)"
