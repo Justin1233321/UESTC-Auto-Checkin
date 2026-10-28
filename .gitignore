@@ -5,3 +5,5 @@ creds.json
 creds-baseline.json
 profile.json
 .private/
+.secrets-export/
+*.tmp
