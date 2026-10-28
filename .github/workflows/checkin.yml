@@ -1,0 +1,104 @@
+name: Daily check-in
+
+on:
+  schedule:
+    # 21:20 北京时间（UTC 13:20）——打卡窗口 21:00-23:30 内
+    - cron: "20 13 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "运行模式"
+        required: true
+        default: validate
+        type: choice
+        options:
+          - validate
+          - ticket
+          - submit
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-checkin
+  cancel-in-progress: false
+
+jobs:
+  checkin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+
+      - name: Offline self-test (golden vectors)
+        run: python -m uestc_wx.cli selftest
+
+      - name: Materialize secrets
+        env:
+          YYB_CREDENTIALS_JSON: ${{ secrets.YYB_CREDENTIALS_JSON }}
+          CHECKIN_PROFILE_JSON: ${{ secrets.CHECKIN_PROFILE_JSON }}
+        run: |
+          set -euo pipefail
+          mkdir -p .private
+          chmod 700 .private
+          python - <<'PY'
+          import os, pathlib
+          private = pathlib.Path(".private")
+          required = ("YYB_CREDENTIALS_JSON", "CHECKIN_PROFILE_JSON")
+          missing = [name for name in required if not os.environ.get(name)]
+          if missing:
+              raise SystemExit("Missing secrets: " + ", ".join(missing))
+          (private / "creds.json").write_text(
+              os.environ["YYB_CREDENTIALS_JSON"], encoding="utf-8")
+          (private / "profile.json").write_text(
+              os.environ["CHECKIN_PROFILE_JSON"], encoding="utf-8")
+          print("secrets materialized")
+          PY
+
+      - name: Run check-in
+        env:
+          STUDENT_ID: ${{ secrets.STUDENT_ID }}
+          STUDENT_PASSWORD: ${{ secrets.STUDENT_PASSWORD }}
+          BROWSER_FINGERPRINT: ${{ secrets.BROWSER_FINGERPRINT }}
+          MODE: ${{ github.event.inputs.mode || 'submit' }}
+        run: |
+          set -euo pipefail
+          case "$MODE" in
+            validate)
+              echo "validate: 离线自检已通过，未发起平台请求"
+              exit 0
+              ;;
+            ticket)
+              python -m uestc_wx.cli ticket --creds .private/creds.json
+              ;;
+            submit)
+              python -m uestc_wx.cli checkin \
+                --creds .private/creds.json \
+                --profile .private/profile.json \
+                --student-id "$STUDENT_ID" \
+                --password "$STUDENT_PASSWORD" \
+                --fingerprint "$BROWSER_FINGERPRINT"
+              ;;
+            *)
+              echo "Unknown mode: $MODE" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Persist rotated credentials
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.CREDENTIALS_PAT }}
+        run: python -m uestc_wx.persist || echo "persist step failed (non-fatal)"
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf .private

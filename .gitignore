@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+creds.json
+creds-baseline.json
+profile.json
+.private/
