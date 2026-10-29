@@ -234,7 +234,18 @@ GitHub → Settings → Developer settings → Fine-grained tokens → Generate 
 | --- | --- |
 | Title | `UESTC checkin` |
 | URL | `https://api.github.com/repos/你的用户名/你的仓库名/actions/workflows/399402942/dispatches` |
-| Schedule | Every day at `13:05`（**注意选 UTC**） |
+| Execution schedule | **Every day at** `21` : `05` |
+| Timezone | `Asia/Shanghai` |
+
+> **时区是关键。** cron-job.org 支持逐任务设置时区，界面右下角会显示
+> `In this job's individual timezone (Asia/Shanghai)`。
+>
+> - 时区设为 `Asia/Shanghai` → 填 `21:05` / `21:50` / `22:35` / `23:20`
+> - 时区保持 `UTC` → 填 `13:05` / `13:50` / `14:35` / `15:20`
+>
+> 两种都可以，但**千万别混**。填完看右侧 **Next executions** 预览，
+> 它显示的就是真实执行时间。如果填的是 21:05 却预览成 `1:05 PM`，
+> 说明时区是 UTC，改成 Shanghai 或把时间改成 13:05。
 
 **Advanced** 标签页里设置：
 
@@ -244,11 +255,11 @@ GitHub → Settings → Developer settings → Fine-grained tokens → Generate 
 | Request body | `{"ref":"main","inputs":{"mode":"submit"}}` |
 | Headers | `Authorization: Bearer github_pat_xxx`<br>`Accept: application/vnd.github+json`<br>`Content-Type: application/json` |
 
-保存后点 **TEST RUN**，看到 `HTTP 204` 就说明通了。
+保存后点 **TEST RUN**，看到 `HTTP 204` 就说明通了。随后去 Actions 页面确认有新的运行记录。
 
 **第三步：照同样方式再建 3 个**
 
-时间分别是 `13:50`、`14:35`、`15:20`（均为 UTC，对应北京 21:50 / 22:35 / 23:20）。
+时间分别是 `21:50`、`22:35`、`23:20`（时区同为 Asia/Shanghai）。
 
 四个任务幂等，第一个成功后其余会秒退，不会重复打卡。
 
