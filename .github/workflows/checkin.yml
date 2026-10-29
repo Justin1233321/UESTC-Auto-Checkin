@@ -2,8 +2,17 @@ name: Daily check-in
 
 on:
   schedule:
-    # 21:20 北京时间（UTC 13:20）——打卡窗口 21:00-23:30 内
-    - cron: "20 13 * * *"
+    # GitHub 的定时调度不保证准时，实测出现过数小时延迟。
+    # 因此在打卡窗口（北京 21:00-23:30 = UTC 13:00-15:30）内安排多个触发点，
+    # 每次运行先查今日记录，已打卡则秒退，不会重复提交。
+    #   13:05 UTC = 21:05 北京
+    #   13:50 UTC = 21:50 北京
+    #   14:35 UTC = 22:35 北京
+    #   15:20 UTC = 23:20 北京
+    - cron: "5 13 * * *"
+    - cron: "50 13 * * *"
+    - cron: "35 14 * * *"
+    - cron: "20 15 * * *"
   workflow_dispatch:
     inputs:
       mode:
@@ -19,6 +28,7 @@ on:
 permissions:
   contents: read
 
+# 同一时间只允许一个实例；后到的排队而非并行，避免重复取票
 concurrency:
   group: daily-checkin
   cancel-in-progress: false
@@ -26,7 +36,7 @@ concurrency:
 jobs:
   checkin:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v5
@@ -78,19 +88,25 @@ jobs:
           case "$MODE" in
             validate)
               echo "validate: 离线自检已通过，未发起平台请求"
-              echo "### validate 通过" >> "$GITHUB_STEP_SUMMARY"
-              echo "38 项黄金向量自检全部通过，未访问任何平台接口。" >> "$GITHUB_STEP_SUMMARY"
+              {
+                echo "### validate 通过"
+                echo "38 项黄金向量自检全部通过，未访问任何平台接口。"
+              } >> "$GITHUB_STEP_SUMMARY"
               ;;
             ticket)
               python -m uestc_wx.cli ticket --creds .private/creds.json
               ;;
             submit)
+              # --wait-for-window：定时任务延迟到窗口外时，等待到窗口开启再打卡。
+              # 最长等待 30 分钟，超过则退出，避免长时间占用 runner 额度。
               python -m uestc_wx.cli checkin \
                 --creds .private/creds.json \
                 --profile .private/profile.json \
                 --student-id "$STUDENT_ID" \
                 --password "$STUDENT_PASSWORD" \
-                --fingerprint "$BROWSER_FINGERPRINT"
+                --fingerprint "$BROWSER_FINGERPRINT" \
+                --wait-for-window \
+                --max-wait-minutes 30
               ;;
             *)
               echo "Unknown mode: $MODE" >&2

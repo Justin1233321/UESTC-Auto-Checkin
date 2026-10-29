@@ -34,6 +34,18 @@ def china_now() -> str:
     """返回北京时间 'YYYY-MM-DD HH:MM:SS'，不依赖运行机器的时区。"""
     return datetime.now(CHINA_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
+
+def china_minutes_now() -> int:
+    """当前北京时间自 00:00 起的分钟数。"""
+    now = datetime.now(CHINA_TZ)
+    return now.hour * 60 + now.minute
+
+
+def in_checkin_window(start_minute: int, end_minute: int) -> bool:
+    """判断当前是否落在打卡窗口内（分钟偏移，与 EP07 语义一致）。"""
+    current = china_minutes_now()
+    return start_minute <= current <= end_minute
+
 CAS_BASE = "https://idas.uestc.edu.cn/authserver"
 PLATFORM_BASE = "https://jzsz.uestc.edu.cn"
 SERVICE = "https://jzsz.uestc.edu.cn/"

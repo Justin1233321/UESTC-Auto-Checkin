@@ -93,6 +93,8 @@ def cmd_checkin(args) -> int:
         profile=profile,
         cred_path=Path(args.creds),
         dry_run=args.dry_run,
+        wait_for_window=args.wait_for_window,
+        max_wait_minutes=args.max_wait_minutes,
     )
     print(json.dumps(_redact(result), ensure_ascii=True, indent=2))
     return 0 if result.get("ok") else 1
@@ -123,6 +125,10 @@ def main(argv: list[str] | None = None) -> int:
     checkin.add_argument("--fingerprint", default="")
     checkin.add_argument("--dry-run", action="store_true",
                          help="只取票不提交")
+    checkin.add_argument("--wait-for-window", action="store_true",
+                         help="不在打卡窗口内时等待到窗口开启（应对定时任务延迟）")
+    checkin.add_argument("--max-wait-minutes", type=int, default=150,
+                         help="最长等待分钟数，默认 150（窗口时长）")
     checkin.set_defaults(func=cmd_checkin)
 
     args = parser.parse_args(argv)

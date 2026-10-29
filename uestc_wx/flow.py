@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import os
-
+import time
 from pathlib import Path
 
 from . import mmtls, platform, yyb
@@ -97,10 +97,17 @@ def acquire_ticket(cred: yyb.OauthCredentials, cred_path: Path,
 
 def run_checkin(student_id: str, password: str, fingerprint: str,
                 profile: platform.CheckinProfile, cred_path: Path,
-                dry_run: bool = False) -> dict:
+                dry_run: bool = False,
+                wait_for_window: bool = False,
+                max_wait_minutes: int = 150) -> dict:
     """完整打卡流程。返回脱敏结果字典。
 
     dry_run=True 时只取票不提交（对应 MoonCheck 的 wx.test）。
+
+    wait_for_window=True 时，若当前不在打卡窗口内则在进程内等待，
+    直到进入窗口或超过 max_wait_minutes。这是为了应对 GitHub 定时任务
+    可能延迟数小时的情况：延迟到窗口外时干等会白跑一次，等待到窗口重开
+    反而能救回当天的打卡。
     """
     result: dict = {
         "ok": False,
@@ -123,6 +130,7 @@ def run_checkin(student_id: str, password: str, fingerprint: str,
             raise FlowError("authorization",
                             "mini-program entry not authorized after portal warmup")
 
+        # --- 幂等检查（先查今日记录，已打卡直接退出）---
         result["stage"] = "today_record"
         today = client.today_record()
         result["today"] = today
@@ -131,6 +139,50 @@ def run_checkin(student_id: str, password: str, fingerprint: str,
             result["stage"] = "already_checked_in"
             result["skipped"] = True
             return result
+
+        # --- 时间窗检查（避免像 4006 那样白跑一次）---
+        if not dry_run:
+            schedule = client.effective_schedule()
+            result["schedule"] = schedule
+            start = schedule.get("startMinute")
+            end = schedule.get("endMinute")
+            if isinstance(start, int) and isinstance(end, int):
+                if not platform.in_checkin_window(start, end):
+                    waited = 0
+                    if wait_for_window and _minutes_until_window(start) <= max_wait_minutes:
+                        while not platform.in_checkin_window(start, end):
+                            remaining = _minutes_until_window(start)
+                            if remaining <= 0:
+                                break
+                            sleep_minutes = min(remaining, 5)
+                            print(
+                                f"[wait] 当前不在打卡窗口内，"
+                                f"等待 {sleep_minutes} 分钟后重试"
+                                f"（已等待 {waited} 分钟）", flush=True)
+                            time.sleep(sleep_minutes * 60)
+                            waited += sleep_minutes
+                            if waited > max_wait_minutes:
+                                raise FlowError(
+                                    "window_expired",
+                                    f"waited {waited} minutes without entering window")
+                            cred = ensure_credentials(cred, cred_path)
+                            client.login(student_id, password, fingerprint)
+                            client.warm_up_portal()
+                            today = client.today_record()
+                            result["today"] = today
+                            if today.get("recordStatusCode") == "CHECKED_IN":
+                                result["ok"] = True
+                                result["stage"] = "already_checked_in"
+                                result["skipped"] = True
+                                return result
+                        result["waitedMinutes"] = waited
+                    else:
+                        raise FlowError(
+                            "outside_window",
+                            f"current time is outside check-in window "
+                            f"({start // 60:02d}:{start % 60:02d}-"
+                            f"{end // 60:02d}:{end % 60:02d} Beijing); "
+                            f"nothing submitted")
 
         result["stage"] = "acquiring_ticket"
         result["requestCounts"]["code"] = 2
@@ -158,6 +210,9 @@ def run_checkin(student_id: str, password: str, fingerprint: str,
             if code in (46001, 46002, 46003):
                 raise FlowError("checkin_ticket_rejected",
                                 f"platform rejected ticket (code {code})")
+            if code == 4006:
+                raise FlowError("outside_window",
+                                "platform rejected: not within check-in window (4006)")
             raise FlowError("checkin_rejected",
                             f"checkin rejected (code {code}, msg {response.get('msg')})")
 
@@ -178,6 +233,14 @@ def run_checkin(student_id: str, password: str, fingerprint: str,
     finally:
         result["finishedAt"] = platform.china_now()
     return result
+
+
+def _minutes_until_window(start_minute: int) -> int:
+    """距下一次窗口开启还有多少分钟；已在窗口内返回 0。"""
+    current = platform.china_minutes_now()
+    if current < start_minute:
+        return start_minute - current
+    return 24 * 60 - current + start_minute
 
 
 def load_profile(path: Path) -> platform.CheckinProfile:
