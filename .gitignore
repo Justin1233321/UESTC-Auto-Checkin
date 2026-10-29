@@ -7,3 +7,12 @@ profile.json
 .private/
 .secrets-export/
 *.tmp
+
+# 调试时临时拉取的 GitHub API 响应
+wf.json
+runs.json
+runs2.json
+jobs.json
+logs.zip
+dispatch.json
+logx/
