@@ -186,24 +186,80 @@ https://open.weixin.qq.com/connect/qrconnect?appid=wxd44977328b36e647&redirect_u
 
 之后就交给定时任务了。
 
-#### 定时策略：为什么有四个触发点
+#### 重要：GitHub 的 schedule 不可靠，必须配外部触发
 
-GitHub 的定时调度**不保证准时**。实测中曾出现过计划 21:20、实际 02:54 执行的情况，延迟 5.6 小时，直接错过打卡窗口。
+GitHub 的 `schedule` 是 **best-effort**，不保证执行。实测数据：
 
-所以不能只靠一个 cron。本项目的做法是在窗口内安排四个触发点：
-
-| UTC | 北京时间 | 作用 |
+| 事件 | 结果 | 备注 |
 | --- | --- | --- |
-| `5 13` | 21:05 | 窗口刚开，主触发 |
-| `50 13` | 21:50 | 补漏 |
-| `35 14` | 22:35 | 补漏 |
-| `20 15` | 23:20 | 窗口末尾兜底 |
+| `schedule` | 延迟 5.6 小时 | 计划 21:20，实际 02:54，被 4006 拒绝 |
+| `schedule` | 完全不触发 | 配置的 21:05 / 21:50 两个点均未出现 |
 
-**重复触发不会重复打卡。** 每次运行第一步就查今日记录，若 `recordStatusCode` 已是 `CHECKED_IN` 立即退出（`stage: already_checked_in`）。所以四个触发点最多只有一个真正提交，其余都是秒退。
+一周内只有 1 次 `schedule` 真正触发，且失败。对低频、新建的私有仓库，这个调度器基本不可用。
 
-此外每次提交前会先读服务端时段接口（EP07），确认当前确实在窗口内。不在窗口就**不提交**，直接报 `outside_window` 退出。这样不会再出现"尝试了、被 4006 拒绝、作业标红"的情况。
+**所以不要把可靠性寄托在 cron 上。** 正确做法是用外部定时服务主动调用 GitHub API 触发 workflow。
 
-`submit` 模式还带 `--wait-for-window`：如果定时任务延迟到窗口外，会在进程内等待到窗口开启再打卡（最长 30 分钟）。
+workflow 里保留的四个 cron 只作为兜底（触发了也无害，幂等会跳过）：
+
+| UTC | 北京时间 |
+| --- | --- |
+| `5 13` | 21:05 |
+| `50 13` | 21:50 |
+| `35 14` | 22:35 |
+| `20 15` | 23:20 |
+
+**重复触发不会重复打卡。** 每次运行第一步就查今日记录，若 `recordStatusCode` 已是 `CHECKED_IN` 立即退出（`stage: already_checked_in`）。所以多次触发最多只有一个真正提交。
+
+此外每次提交前会先读服务端时段接口（EP07），确认当前确实在窗口内。不在窗口就**不提交**，直接报 `outside_window` 退出。
+
+`submit` 模式还带 `--wait-for-window`：延迟到窗口外时会在进程内等待窗口开启（最长 30 分钟）。
+
+#### 配置外部触发（推荐，10 分钟）
+
+用 [cron-job.org](https://cron-job.org)（免费）每天在窗口内多次调用 GitHub API，绕开 GitHub 的调度队列。
+
+**第一步：创建一个仅供此用途的 PAT**
+
+GitHub → Settings → Developer settings → Fine-grained tokens → Generate new token：
+
+- Repository access：只选你的打卡仓库
+- Repository permissions → **Actions: Read and write**
+- 生成后复制，形如 `github_pat_xxx`
+
+**第二步：在 cron-job.org 建任务**
+
+注册后在 Dashboard 点 **Create cronjob**，按下表填：
+
+| 字段 | 值 |
+| --- | --- |
+| Title | `UESTC checkin` |
+| URL | `https://api.github.com/repos/你的用户名/你的仓库名/actions/workflows/399402942/dispatches` |
+| Schedule | Every day at `13:05`（**注意选 UTC**） |
+
+**Advanced** 标签页里设置：
+
+| 字段 | 值 |
+| --- | --- |
+| Request method | `POST` |
+| Request body | `{"ref":"main","inputs":{"mode":"submit"}}` |
+| Headers | `Authorization: Bearer github_pat_xxx`<br>`Accept: application/vnd.github+json`<br>`Content-Type: application/json` |
+
+保存后点 **TEST RUN**，看到 `HTTP 204` 就说明通了。
+
+**第三步：照同样方式再建 3 个**
+
+时间分别是 `13:50`、`14:35`、`15:20`（均为 UTC，对应北京 21:50 / 22:35 / 23:20）。
+
+四个任务幂等，第一个成功后其余会秒退，不会重复打卡。
+
+> `399402942` 是 workflow 的 ID，你的仓库可能不同。用这条命令查：
+> ```bash
+> curl -H "Authorization: Bearer 你的PAT" \
+>   https://api.github.com/repos/你的用户名/你的仓库名/actions/workflows
+> ```
+> 返回中的 `id` 字段就是。
+
+配置完成后，每天 21:05 起会有 4 次真实触发，不再依赖 GitHub 的调度器。
 
 ---
 
