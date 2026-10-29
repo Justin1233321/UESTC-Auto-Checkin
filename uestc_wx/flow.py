@@ -11,8 +11,7 @@ from __future__ import annotations
 
 import json
 import os
-import time
-from dataclasses import asdict
+
 from pathlib import Path
 
 from . import mmtls, platform, yyb
@@ -109,7 +108,7 @@ def run_checkin(student_id: str, password: str, fingerprint: str,
         "usesWechatProcess": False,
         "automaticRetries": False,
         "requestCounts": {"code": 0, "ticket": 0, "checkin": 0},
-        "startedAt": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "startedAt": platform.china_now(),
     }
     try:
         cred = load_credentials(cred_path)
@@ -177,7 +176,7 @@ def run_checkin(student_id: str, password: str, fingerprint: str,
         result["stage"] = "error"
         result["error"] = f"{type(error).__name__}: {error}"
     finally:
-        result["finishedAt"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        result["finishedAt"] = platform.china_now()
     return result
 
 

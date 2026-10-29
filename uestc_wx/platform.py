@@ -20,9 +20,19 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+# 平台所有时间字段都按北京时间解释。GitHub runner 的本地时区是 UTC，
+# 若用 time.localtime() 会得到 UTC 时间（差 8 小时），导致 clientTime 错位。
+CHINA_TZ = timezone(timedelta(hours=8))
+
+
+def china_now() -> str:
+    """返回北京时间 'YYYY-MM-DD HH:MM:SS'，不依赖运行机器的时区。"""
+    return datetime.now(CHINA_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
 CAS_BASE = "https://idas.uestc.edu.cn/authserver"
 PLATFORM_BASE = "https://jzsz.uestc.edu.cn"
@@ -86,7 +96,7 @@ class CheckinProfile:
 
     def payload(self, now: str | None = None) -> dict:
         """按实测成功载荷逐字段构造（不做字段裁剪：裁剪有产生异常记录的风险）。"""
-        client_time = now or time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        client_time = now or china_now()
         return {
             "latitude": self.latitude,
             "longitude": self.longitude,
