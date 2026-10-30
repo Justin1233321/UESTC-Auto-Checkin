@@ -199,14 +199,9 @@ GitHub 的 `schedule` 是 **best-effort**，不保证执行。实测数据：
 
 **所以不要把可靠性寄托在 cron 上。** 正确做法是用外部定时服务主动调用 GitHub API 触发 workflow。
 
-workflow 里保留的四个 cron 只作为兜底（触发了也无害，幂等会跳过）：
+**本项目的 workflow 已停用 `schedule`**，只保留 `workflow_dispatch`（手动 + 外部服务触发）。
 
-| UTC | 北京时间 |
-| --- | --- |
-| `5 13` | 21:05 |
-| `50 13` | 21:50 |
-| `35 14` | 22:35 |
-| `20 15` | 23:20 |
+停用的原因是体验问题：schedule 有时延迟到凌晨才触发，落在窗口外失败，半夜给人发失败邮件。原 cron 配置以注释形式保留在 workflow 文件里，需要时可取消注释恢复。
 
 **重复触发不会重复打卡。** 每次运行第一步就查今日记录，若 `recordStatusCode` 已是 `CHECKED_IN` 立即退出（`stage: already_checked_in`）。所以多次触发最多只有一个真正提交。
 
