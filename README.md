@@ -27,6 +27,7 @@
 | 项目 | 说明 |
 | --- | --- |
 | GitHub 账号 | 免费，用来跑定时任务 |
+| **Chrome 或 Edge 浏览器** | **推荐**。需要用它打开开发者工具（F12）查看 Cookie 和网络请求，其他浏览器面板位置不同 |
 | 你的微信 | 只需扫码授权一次 |
 | 学号 + 统一身份认证密码 | 打卡平台登录用 |
 | 常开设备 | **不需要** |
@@ -123,11 +124,21 @@ GitHub 自带的 `schedule` 不可靠（会延迟数小时甚至完全不触发�
 
 **第一步：创建一个 PAT**
 
-GitHub → Settings → Developer settings → Fine-grained tokens → Generate new token：
+1. 点右上角**你自己头像** → Settings
+2. 左侧栏拉到最底 → Developer settings
+3. Personal access tokens → **Fine-grained tokens** → Generate new token
+4. 按下表填写：
 
-- Repository access：只选你的打卡仓库
-- Repository permissions → **Actions: Read and write**
-- 生成后复制，形如 `github_pat_xxx`
+| 字段 | 值 |
+| --- | --- |
+| Token name | 随便起，比如 `uestc-checkin` |
+| Expiration | 建议 90 天或更久（过期后需重新创建并更新） |
+| Repository access | Only select repositories → 只选你的打卡仓库 |
+| Repository permissions | 展开后找到 **Actions**，设为 **Read and write** |
+
+生成后复制，形如 `github_pat_xxx`。**这个值只会显示一次**，关掉页面就再也看不到了。
+
+> 权限只需要 **Actions: Read and write** 这一项，其他都不用给。
 
 **第二步：在 cron-job.org 建任务**
 
@@ -156,9 +167,19 @@ GitHub → Settings → Developer settings → Fine-grained tokens → Generate 
 
 | 字段 | 值 |
 | --- | --- |
+| Time zone | `Asia/Shanghai` |
 | Request method | `POST` |
 | Request body | `{"ref":"main","inputs":{"mode":"submit"}}` |
-| Headers | `Authorization: Bearer github_pat_xxx`<br>`Accept: application/vnd.github+json`<br>`Content-Type: application/json` |
+| Headers | 见下图，三行 |
+
+![cron-job.org 的 Headers 与 Advanced 配置](docs/assets/cronjob-headers.jpg)
+
+上图中 `Authorization` 的值填 `Bearer ` 加上你刚创建的 PAT（图中已打码）。
+三个 Header 分别是：
+
+- `Accept`: `application/vnd.github+json`
+- `Authorization`: `Bearer github_pat_xxx`
+- `Content-Type`: `application/json`
 
 保存后点 **TEST RUN**，看到 `HTTP 204` 就说明通了。随后去 Actions 页面确认有新的运行记录。
 
