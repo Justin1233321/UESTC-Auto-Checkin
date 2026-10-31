@@ -45,7 +45,9 @@
 
 ### 第 2 步：打开配置向导
 
-访问 **[配置向导](https://你的用户名.github.io/你的仓库名/)**（如果没开 GitHub Pages，可直接下载 `docs/index.html` 用浏览器打开）。
+访问 **<https://justin1233321.github.io/UESTC-Auto-Checkin/>**。
+
+> 如果你 Fork 了自己的仓库，也可以直接用浏览器打开自己仓库里的 `docs/index.html`（下载后双击即可），效果完全相同。向导是纯前端页面，不依赖任何服务器。
 
 向导会引导你填四项信息：
 
