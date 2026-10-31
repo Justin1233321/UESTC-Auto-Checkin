@@ -59,7 +59,7 @@ jobs:
             checkin-config-
 
       - name: Install dependencies
-        if: (github.event.inputs.mode || 'submit') != 'validate'
+        # selftest 也要 import cryptography，因此任何模式都必须安装依赖
         run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
 
       - name: Offline self-test (golden vectors)
