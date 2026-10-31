@@ -57,30 +57,35 @@ def main(argv: list[str] | None = None) -> int:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--repo", required=True, help="owner/name")
     parser.add_argument("--token", default="", help="带 Actions:write 权限的 PAT")
-    parser.add_argument("--workflow", default="", help="workflow ID 或文件名，留空则自动查询")
+    parser.add_argument("--workflow", default="checkin.yml",
+                        help="workflow 文件名（默认 checkin.yml，对所有仓库通用）")
     parser.add_argument("--ref", default="main")
     parser.add_argument("--mode", default="submit", choices=("submit", "ticket", "validate"))
     parser.add_argument("--test", action="store_true", help="实际触发一次以验证配置")
     args = parser.parse_args(argv)
 
+    # 直接用文件名而不是数字 ID：ID 因仓库而异，文件名对所有仓库都一样
     workflow_id = args.workflow
-    if not workflow_id:
+
+    # 可选：查一次确认这个仓库里确实存在该 workflow
+    if args.token:
         status, body = _request(
-            f"{API}/repos/{args.repo}/actions/workflows", args.token or None)
-        if status != 200:
-            print(f"查询 workflow 失败：HTTP {status}", file=sys.stderr)
-            print(json.dumps(body, ensure_ascii=False, indent=2), file=sys.stderr)
-            return 1
-        workflows = body.get("workflows") or []
-        if not workflows:
-            print("仓库里没有 workflow", file=sys.stderr)
-            return 1
-        workflow_id = str(workflows[0]["id"])
-        print(f"找到 workflow: {workflows[0]['name']} (id={workflow_id}, "
-              f"state={workflows[0]['state']})", file=sys.stderr)
-        if len(workflows) > 1:
-            print("注意：仓库有多个 workflow，已取第一个；可用 --workflow 指定",
-                  file=sys.stderr)
+            f"{API}/repos/{args.repo}/actions/workflows", args.token)
+        if status == 200:
+            workflows = body.get("workflows") or []
+            match = [w for w in workflows
+                     if w.get("path", "").endswith(workflow_id)
+                     or str(w.get("id")) == workflow_id]
+            if not match:
+                print(f"警告：{args.repo} 里没有找到 {workflow_id}，"
+                      f"现有 workflow: "
+                      f"{[w.get('name') for w in workflows]}", file=sys.stderr)
+            else:
+                w = match[0]
+                print(f"确认 workflow: {w['name']} (id={w['id']}, "
+                      f"state={w['state']})", file=sys.stderr)
+        else:
+            print(f"（跳过 workflow 存在性检查：HTTP {status}）", file=sys.stderr)
 
     url = f"{API}/repos/{args.repo}/actions/workflows/{workflow_id}/dispatches"
     payload = {"ref": args.ref, "inputs": {"mode": args.mode}}

@@ -117,34 +117,11 @@
 
 ### 第 5 步：配置外部定时触发
 
-#### 重要：GitHub 的 schedule 不可靠
+GitHub 自带的 `schedule` 不可靠（会延迟数小时甚至完全不触发），本项目已停用，改用外部定时服务调用 API 触发 workflow。
 
-GitHub 的 `schedule` 是 **best-effort**，不保证执行。实测数据：
+用 [cron-job.org](https://cron-job.org)（免费）每天在打卡窗口内多次调用。
 
-| 事件 | 结果 | 备注 |
-| --- | --- | --- |
-| `schedule` | 延迟 5.6 小时 | 计划 21:20，实际 02:54，被 4006 拒绝 |
-| `schedule` | 完全不触发 | 配置的 21:05 / 21:50 两个点均未出现 |
-
-一周内只有 1 次 `schedule` 真正触发，且失败。对低频、新建的私有仓库，这个调度器基本不可用。
-
-**所以不要把可靠性寄托在 cron 上。** 正确做法是用外部定时服务主动调用 GitHub API 触发 workflow。
-
-**本项目的 workflow 已停用 `schedule`**，只保留 `workflow_dispatch`（手动 + 外部服务触发）。
-
-停用的原因是体验问题：schedule 有时延迟到凌晨才触发，落在窗口外失败，半夜给人发失败邮件。原 cron 配置以注释形式保留在 workflow 文件里，需要时可取消注释恢复。
-
-**重复触发不会重复打卡。** 每次运行第一步就查今日记录，若 `recordStatusCode` 已是 `CHECKED_IN` 立即退出（`stage: already_checked_in`）。所以多次触发最多只有一个真正提交。
-
-此外每次提交前会先读服务端时段接口（EP07），确认当前确实在窗口内。不在窗口就**不提交**，直接报 `outside_window` 退出。
-
-`submit` 模式还带 `--wait-for-window`：延迟到窗口外时会在进程内等待窗口开启（最长 30 分钟）。
-
-#### 配置外部触发（推荐，10 分钟）
-
-用 [cron-job.org](https://cron-job.org)（免费）每天在窗口内多次调用 GitHub API，绕开 GitHub 的调度队列。
-
-**第一步：创建一个仅供此用途的 PAT**
+**第一步：创建一个 PAT**
 
 GitHub → Settings → Developer settings → Fine-grained tokens → Generate new token：
 
@@ -154,14 +131,16 @@ GitHub → Settings → Developer settings → Fine-grained tokens → Generate 
 
 **第二步：在 cron-job.org 建任务**
 
-注册后在 Dashboard 点 **Create cronjob**，按下表填：
+注册后点 **Create cronjob**，按下表填：
 
 | 字段 | 值 |
 | --- | --- |
 | Title | `UESTC checkin` |
-| URL | `https://api.github.com/repos/你的用户名/你的仓库名/actions/workflows/399402942/dispatches` |
+| URL | `https://api.github.com/repos/你的用户名/你的仓库名/actions/workflows/checkin.yml/dispatches` |
 | Execution schedule | **Every day at** `21` : `05` |
 | Timezone | `Asia/Shanghai` |
+
+> URL 里用的是 workflow 文件名 `checkin.yml`，不是数字 ID。文件名对所有仓库都一样，直接照抄即可，不需要查。
 
 > **时区是关键。** cron-job.org 支持逐任务设置时区，界面右下角会显示
 > `In this job's individual timezone (Asia/Shanghai)`。
@@ -189,16 +168,9 @@ GitHub → Settings → Developer settings → Fine-grained tokens → Generate 
 
 如果想更稳，可以照同样方式再建 3 个，时间分别是 `21:50`、`22:35`、`23:20`（时区同为 Asia/Shanghai）。这样万一某次触发失败，后面还有机会补上。
 
-四个任务幂等，第一个成功后其余会秒退，不会重复打卡。cron-job.org 免费版最多允许一定数量任务，按需添加即可。
+多个任务幂等，第一个成功后其余会秒退，不会重复打卡。
 
-> `399402942` 是 workflow 的 ID，你的仓库可能不同。用这条命令查：
-> ```bash
-> curl -H "Authorization: Bearer 你的PAT" \
->   https://api.github.com/repos/你的用户名/你的仓库名/actions/workflows
-> ```
-> 返回中的 `id` 字段就是。
-
-配置完成后，每天 21:05 起会有 4 次真实触发，不再依赖 GitHub 的调度器。
+配置完成后，每天 21:05 起会真实触发，不再依赖 GitHub 的调度器。
 
 ---
 
