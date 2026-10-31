@@ -149,21 +149,15 @@
     </div>
     <div class="note">
       <strong>扫码完成后，回到授权页按 F12：</strong><br>
-      Application（应用程序）→ Cookies → 点开 <code>static.pc.yyb.qq.com</code><br>
-      复制 <code>openid</code>、<code>accesstoken</code>、<code>refreshtoken</code> 三项的值，填到下面。
+      Application（应用程序）→ 左侧「Cookie」→ 点开 <code>static.pc.yyb.qq.com</code><br>
+      在右侧列表找到 <code>openid</code>、<code>accesstoken</code>、<code>refreshtoken</code>，
+      双击 Value 复制，填到下面。
+      <br><br>
+      <strong>注意域名不要选错。</strong>要选 <code>static.pc.yyb.qq.com</code>，
+      不是 <code>idas.uestc.edu.cn</code>（那个下面是指纹，第 4 步才用）。
       <br><br>
       <strong>复制完立刻关闭那个授权页面。</strong>同一组凭据只能有一个客户端保活。
     </div>
-
-    <figure>
-      <img src="assets/fingerprint.jpg" alt="在 Chrome 开发者工具的 Application 面板中查看 Cookie">
-      <figcaption>
-        上图：按 F12 打开开发者工具 → 顶部选「应用 / Application」→ 左侧「Cookie」→
-        点开 <code>idas.uestc.edu.cn</code> → 在列表中找到
-        <code>MULTIFACTOR_BROWSER_FINGERPRINT</code>（红框处），右侧 Value 就是指纹。
-        <br>取值时把鼠标移到 Value 上双击即可全选复制。
-      </figcaption>
-    </figure>
   </section>
 
   <!-- 步骤 2 -->
@@ -235,6 +229,17 @@
       找 <code>MULTIFACTOR_BROWSER_FINGERPRINT</code>。
       它是 HttpOnly，<code>document.cookie</code> 看不到。
     </div>
+
+    <figure>
+      <img src="assets/fingerprint.jpg"
+           alt="在 Chrome 开发者工具的 Application 面板中查看 MULTIFACTOR_BROWSER_FINGERPRINT">
+      <figcaption>
+        上图：按 F12 → 顶部选「应用 / Application」→ 左侧「Cookie」→
+        点开 <code>idas.uestc.edu.cn</code> → 在列表中找到
+        <code>MULTIFACTOR_BROWSER_FINGERPRINT</code>（红框处），右侧 Value 就是指纹。
+        <br>双击右侧 Value 即可全选复制。
+      </figcaption>
+    </figure>
   </section>
 
   <!-- 步骤 5 -->
