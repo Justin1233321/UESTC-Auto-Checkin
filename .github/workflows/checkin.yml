@@ -102,7 +102,11 @@ jobs:
           PY
 
       - name: Run check-in
+        id: checkin
         if: (github.event.inputs.mode || 'submit') != 'validate'
+        # 不立即中断：让后续步骤能按 outcome 决定是否保存缓存，
+        # 最后由「Report check-in result」统一定义 job 成败。
+        continue-on-error: true
         env:
           MODE: ${{ github.event.inputs.mode || 'submit' }}
         run: |
@@ -131,11 +135,24 @@ jobs:
           echo "validate: 离线自检已通过，未发起平台请求" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Save rotated credentials
-        if: always() && (github.event.inputs.mode || 'submit') != 'validate'
+        # 只有在 check-in 步骤成功时才保存缓存。
+        # 之前用 always() 会在凭据失效（-109）时也把坏值存进缓存，
+        # 下次 restore-keys 又读到它，形成"坏缓存自我延续"的死锁。
+        if: steps.checkin.outcome == 'success'
         uses: actions/cache/save@v4
         with:
           path: .private/config.json
           key: checkin-config-${{ github.run_id }}
+
+      - name: Report check-in result
+        # 用 checkin 步骤的真实结果决定本次 job 成败
+        if: (github.event.inputs.mode || 'submit') != 'validate'
+        run: |
+          if [ "${{ steps.checkin.outcome }}" != "success" ]; then
+            echo "check-in 失败（见上方日志），未保存缓存"
+            exit 1
+          fi
+          echo "check-in 成功"
 
       - name: Cleanup
         if: always()
