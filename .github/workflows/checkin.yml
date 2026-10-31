@@ -46,7 +46,20 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Restore rotated credentials
+        # 微信 refresh_token 每约 2 小时轮换，新值只存在于当次 runner。
+        # 用 Actions cache 保存，避免依赖 PAT 回写 Secret。
+        # 缓存丢失时回落到 Secret 里的初始凭据，refresh_token 仍有效即可自愈。
+        if: (github.event.inputs.mode || 'submit') != 'validate'
+        uses: actions/cache/restore@v4
+        with:
+          path: .private/config.json
+          key: checkin-config-${{ github.run_id }}
+          restore-keys: |
+            checkin-config-
+
       - name: Install dependencies
+        if: (github.event.inputs.mode || 'submit') != 'validate'
         run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
 
       - name: Offline self-test (golden vectors)
@@ -56,8 +69,8 @@ jobs:
         # validate 不需要凭据，允许在配置 Secrets 之前先验证代码
         if: (github.event.inputs.mode || 'submit') != 'validate'
         env:
-          YYB_CREDENTIALS_JSON: ${{ secrets.YYB_CREDENTIALS_JSON }}
-          CHECKIN_PROFILE_JSON: ${{ secrets.CHECKIN_PROFILE_JSON }}
+          CHECKIN_CONFIG: ${{ secrets.CHECKIN_CONFIG }}
+          CAS_ACCOUNT: ${{ secrets.CAS_ACCOUNT }}
         run: |
           set -euo pipefail
           mkdir -p .private
@@ -65,47 +78,39 @@ jobs:
           python - <<'PY'
           import os, pathlib
           private = pathlib.Path(".private")
-          required = ("YYB_CREDENTIALS_JSON", "CHECKIN_PROFILE_JSON")
+          required = ("CHECKIN_CONFIG", "CAS_ACCOUNT")
           missing = [name for name in required if not os.environ.get(name)]
           if missing:
               raise SystemExit(
                   "Missing secrets: " + ", ".join(missing) +
                   " (Settings -> Secrets and variables -> Actions)")
-          (private / "creds.json").write_text(
-              os.environ["YYB_CREDENTIALS_JSON"], encoding="utf-8")
-          (private / "profile.json").write_text(
-              os.environ["CHECKIN_PROFILE_JSON"], encoding="utf-8")
-          print("secrets materialized")
+          (private / "cas.json").write_text(
+              os.environ["CAS_ACCOUNT"], encoding="utf-8")
+          # 若 cache 未恢复出 config.json，才用 Secret 里的初始值
+          config_path = private / "config.json"
+          if not config_path.exists():
+              config_path.write_text(
+                  os.environ["CHECKIN_CONFIG"], encoding="utf-8")
+              print("config from secret")
+          else:
+              print("config from cache")
           PY
 
       - name: Run check-in
+        if: (github.event.inputs.mode || 'submit') != 'validate'
         env:
-          STUDENT_ID: ${{ secrets.STUDENT_ID }}
-          STUDENT_PASSWORD: ${{ secrets.STUDENT_PASSWORD }}
-          BROWSER_FINGERPRINT: ${{ secrets.BROWSER_FINGERPRINT }}
           MODE: ${{ github.event.inputs.mode || 'submit' }}
         run: |
           set -euo pipefail
           case "$MODE" in
-            validate)
-              echo "validate: 离线自检已通过，未发起平台请求"
-              {
-                echo "### validate 通过"
-                echo "38 项黄金向量自检全部通过，未访问任何平台接口。"
-              } >> "$GITHUB_STEP_SUMMARY"
-              ;;
             ticket)
-              python -m uestc_wx.cli ticket --creds .private/creds.json
+              python -m uestc_wx.cli ticket --config .private/config.json
               ;;
             submit)
-              # --wait-for-window：定时任务延迟到窗口外时，等待到窗口开启再打卡。
-              # 最长等待 30 分钟，超过则退出，避免长时间占用 runner 额度。
+              # --wait-for-window：若触发时恰好不在窗口内，等待到窗口开启再打卡。
               python -m uestc_wx.cli checkin \
-                --creds .private/creds.json \
-                --profile .private/profile.json \
-                --student-id "$STUDENT_ID" \
-                --password "$STUDENT_PASSWORD" \
-                --fingerprint "$BROWSER_FINGERPRINT" \
+                --config .private/config.json \
+                --cas-config .private/cas.json \
                 --wait-for-window \
                 --max-wait-minutes 30
               ;;
@@ -115,11 +120,17 @@ jobs:
               ;;
           esac
 
-      - name: Persist rotated credentials
+      - name: Validate mode summary
+        if: (github.event.inputs.mode || 'submit') == 'validate'
+        run: |
+          echo "validate: 离线自检已通过，未发起平台请求" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Save rotated credentials
         if: always() && (github.event.inputs.mode || 'submit') != 'validate'
-        env:
-          GH_TOKEN: ${{ secrets.CREDENTIALS_PAT }}
-        run: python -m uestc_wx.persist || echo "persist step failed (non-fatal)"
+        uses: actions/cache/save@v4
+        with:
+          path: .private/config.json
+          key: checkin-config-${{ github.run_id }}
 
       - name: Cleanup
         if: always()

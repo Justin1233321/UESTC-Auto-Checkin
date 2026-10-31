@@ -24,36 +24,79 @@ class FlowError(Exception):
         self.detail = detail
 
 
-def load_credentials(path: Path) -> yyb.OauthCredentials:
+def load_config(path: Path) -> tuple[yyb.OauthCredentials, platform.CheckinProfile]:
+    """读取合并配置（微信凭据 + 打卡位置）。
+
+    必需字段只有 5 个：openid / access_token / refresh_token / latitude / longitude。
+    expires_at 可省略（视为 0，首次运行自动刷新），reverseGeocode 建议填写。
+    """
     document = json.loads(path.read_text(encoding="utf-8"))
     cred = yyb.OauthCredentials(
-        openid=document.get("openid", ""),
-        access_token=document.get("access_token", ""),
-        refresh_token=document.get("refresh_token", ""),
+        openid=str(document.get("openid", "")),
+        access_token=str(document.get("access_token", "")),
+        refresh_token=str(document.get("refresh_token", "")),
         expires_at=int(document.get("expires_at", 0)),
     )
     if not cred.valid():
-        raise FlowError("credentials", "credentials file missing openid/access_token")
-    # 记录基线：persist 模块据此判断是否发生轮换，避免每次运行都重写 Secret
+        raise FlowError("credentials",
+                        "config missing openid/access_token")
+
+    # 记录基线：便于人工对比本次运行是否发生凭据轮换
     baseline = path.with_name(path.stem + "-baseline" + path.suffix)
     try:
         baseline.write_text(json.dumps(document, indent=2), encoding="utf-8")
         os.chmod(baseline, 0o600)
     except OSError:
         pass
-    return cred
+
+    if "latitude" not in document or "longitude" not in document:
+        raise FlowError("profile", "config missing latitude/longitude")
+    profile = platform.CheckinProfile(
+        latitude=float(document["latitude"]),
+        longitude=float(document["longitude"]),
+        reverse_geocode=str(document.get("reverseGeocode", "")),
+        user_agent=str(document.get("userAgent", platform.DEFAULT_USER_AGENT)),
+        coordinate_system=str(document.get("coordinateSystemCode", "gcj02")),
+        accuracy=float(document.get("accuracy", 86)),
+        location_duration_ms=float(document.get("locationDurationMs", 1189)),
+        network_type=str(document.get("networkTypeCode", "4g")),
+        location_enabled=bool(document.get("locationEnabled", False)),
+    )
+    return cred, profile
+
+
+def load_cas_account(path: Path) -> tuple[str, str, str]:
+    """读取 CAS 账号配置，返回 (student_id, password, fingerprint)。"""
+    document = json.loads(path.read_text(encoding="utf-8"))
+    student_id = str(document.get("student_id", "")).strip()
+    password = str(document.get("password", ""))
+    fingerprint = str(document.get("fingerprint", "")).strip()
+    if not student_id:
+        raise FlowError("cas_account", "cas config missing student_id")
+    if not password:
+        raise FlowError("cas_account", "cas config missing password")
+    return student_id, password, fingerprint
 
 
 def save_credentials(path: Path, cred: yyb.OauthCredentials) -> None:
-    """凭据轮换后必须立即落盘，否则下一个 runner 拿到的是失效令牌。"""
+    """凭据轮换后必须立即落盘，否则下一个 runner 拿到的是失效令牌。
+
+    只更新凭据字段，保留配置里的其他字段（位置等），避免覆盖用户数据。
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(json.dumps({
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        document = {}
+    document.update({
         "openid": cred.openid,
         "access_token": cred.access_token,
         "refresh_token": cred.refresh_token,
         "expires_at": cred.expires_at,
-    }, indent=2), encoding="utf-8")
+    })
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(json.dumps(document, indent=2, ensure_ascii=False),
+                         encoding="utf-8")
     os.chmod(temporary, 0o600)
     temporary.replace(path)
 
@@ -96,11 +139,13 @@ def acquire_ticket(cred: yyb.OauthCredentials, cred_path: Path,
 
 
 def run_checkin(student_id: str, password: str, fingerprint: str,
-                profile: platform.CheckinProfile, cred_path: Path,
+                config_path: Path,
                 dry_run: bool = False,
                 wait_for_window: bool = False,
                 max_wait_minutes: int = 150) -> dict:
     """完整打卡流程。返回脱敏结果字典。
+
+    配置从单个文件读取（微信凭据 + 打卡位置合并）。
 
     dry_run=True 时只取票不提交（对应 MoonCheck 的 wx.test）。
 
@@ -118,8 +163,8 @@ def run_checkin(student_id: str, password: str, fingerprint: str,
         "startedAt": platform.china_now(),
     }
     try:
-        cred = load_credentials(cred_path)
-        cred = ensure_credentials(cred, cred_path)
+        cred, profile = load_config(config_path)
+        cred = ensure_credentials(cred, config_path)
 
         result["stage"] = "cas_login"
         client = platform.PlatformClient(user_agent=profile.user_agent)
@@ -165,7 +210,7 @@ def run_checkin(student_id: str, password: str, fingerprint: str,
                                 raise FlowError(
                                     "window_expired",
                                     f"waited {waited} minutes without entering window")
-                            cred = ensure_credentials(cred, cred_path)
+                            cred = ensure_credentials(cred, config_path)
                             client.login(student_id, password, fingerprint)
                             client.warm_up_portal()
                             today = client.today_record()
@@ -187,7 +232,7 @@ def run_checkin(student_id: str, password: str, fingerprint: str,
         result["stage"] = "acquiring_ticket"
         result["requestCounts"]["code"] = 2
         result["requestCounts"]["ticket"] = 1
-        ticket, cred = acquire_ticket(cred, cred_path)
+        ticket, cred = acquire_ticket(cred, config_path)
         result["ticketLength"] = len(ticket)
 
         if dry_run:
@@ -241,19 +286,3 @@ def _minutes_until_window(start_minute: int) -> int:
     if current < start_minute:
         return start_minute - current
     return 24 * 60 - current + start_minute
-
-
-def load_profile(path: Path) -> platform.CheckinProfile:
-    document = json.loads(path.read_text(encoding="utf-8"))
-    payload = document.get("payload", document)
-    return platform.CheckinProfile(
-        latitude=float(payload["latitude"]),
-        longitude=float(payload["longitude"]),
-        reverse_geocode=str(payload.get("reverseGeocode", "")),
-        user_agent=str(payload.get("userAgent", platform.DEFAULT_USER_AGENT)),
-        coordinate_system=str(payload.get("coordinateSystemCode", "gcj02")),
-        accuracy=float(payload.get("accuracy", 86)),
-        location_duration_ms=float(payload.get("locationDurationMs", 1189)),
-        network_type=str(payload.get("networkTypeCode", "4g")),
-        location_enabled=bool(payload.get("locationEnabled", False)),
-    )

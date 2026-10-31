@@ -47,11 +47,11 @@ def cmd_selftest(_args) -> int:
 
 def cmd_code(args) -> int:
     """只取一个 code，验证 MMTLS 链路。"""
-    cred_path = Path(args.creds)
-    cred = flow.load_credentials(cred_path)
-    cred = flow.ensure_credentials(cred, cred_path)
+    config_path = Path(args.config)
+    cred, _profile = flow.load_config(config_path)
+    cred = flow.ensure_credentials(cred, config_path)
     login_buffer, cred = yyb.fetch_login_buffer_with_selfheal(cred)
-    flow.save_credentials(cred_path, cred)
+    flow.save_credentials(config_path, cred)
     result = mmtls.get_code(login_buffer, platform.MINI_PROGRAM_APP_ID,
                             args.timeout_ms)
     if result.result != mmtls.WxResult.OK:
@@ -68,11 +68,11 @@ def cmd_code(args) -> int:
 
 def cmd_ticket(args) -> int:
     """两段式取票（不提交打卡），对应 MoonCheck 的 wx.test。"""
-    cred_path = Path(args.creds)
-    cred = flow.load_credentials(cred_path)
-    cred = flow.ensure_credentials(cred, cred_path)
+    config_path = Path(args.config)
+    cred, _profile = flow.load_config(config_path)
+    cred = flow.ensure_credentials(cred, config_path)
     try:
-        ticket, _cred = flow.acquire_ticket(cred, cred_path, args.timeout_ms)
+        ticket, _cred = flow.acquire_ticket(cred, config_path, args.timeout_ms)
     except (flow.FlowError, yyb.OauthError, platform.PlatformError) as error:
         print(json.dumps({"ok": False,
                           "stage": getattr(error, "stage", "error"),
@@ -85,13 +85,12 @@ def cmd_ticket(args) -> int:
 
 
 def cmd_checkin(args) -> int:
-    profile = flow.load_profile(Path(args.profile))
+    student_id, password, fingerprint = flow.load_cas_account(Path(args.cas_config))
     result = flow.run_checkin(
-        student_id=args.student_id,
-        password=args.password,
-        fingerprint=args.fingerprint,
-        profile=profile,
-        cred_path=Path(args.creds),
+        student_id=student_id,
+        password=password,
+        fingerprint=fingerprint,
+        config_path=Path(args.config),
         dry_run=args.dry_run,
         wait_for_window=args.wait_for_window,
         max_wait_minutes=args.max_wait_minutes,
@@ -108,21 +107,21 @@ def main(argv: list[str] | None = None) -> int:
     selftest.set_defaults(func=cmd_selftest)
 
     code = sub.add_parser("code", help="只取一个 wx.login code")
-    code.add_argument("--creds", required=True)
+    code.add_argument("--config", required=True,
+                      help="合并配置（微信凭据 + 位置）")
     code.add_argument("--timeout-ms", type=int, default=30000)
     code.set_defaults(func=cmd_code)
 
     ticket = sub.add_parser("ticket", help="两段式取票（不提交）")
-    ticket.add_argument("--creds", required=True)
+    ticket.add_argument("--config", required=True)
     ticket.add_argument("--timeout-ms", type=int, default=30000)
     ticket.set_defaults(func=cmd_ticket)
 
     checkin = sub.add_parser("checkin", help="完整打卡")
-    checkin.add_argument("--creds", required=True)
-    checkin.add_argument("--profile", required=True)
-    checkin.add_argument("--student-id", required=True)
-    checkin.add_argument("--password", required=True)
-    checkin.add_argument("--fingerprint", default="")
+    checkin.add_argument("--config", required=True,
+                         help="合并配置（微信凭据 + 位置）")
+    checkin.add_argument("--cas-config", required=True,
+                         help="CAS 账号配置（学号 / 密码 / 指纹）")
     checkin.add_argument("--dry-run", action="store_true",
                          help="只取票不提交")
     checkin.add_argument("--wait-for-window", action="store_true",

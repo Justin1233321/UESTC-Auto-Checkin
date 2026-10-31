@@ -33,160 +33,89 @@
 
 ---
 
-## 五步上手
+## 四步上手
 
-### 第 0 步：拿一份自己的代码
+全程在浏览器里完成，**不需要安装任何软件**。
+
+### 第 1 步：拿一份自己的代码
 
 点仓库右上角 **Fork**，或 **Use this template** → Create a new repository。
 
 **强烈建议设为 Private。** 公开仓库的 Actions 日志任何人都能看。
 
-### 第 1 步：在自己电脑上装依赖
+### 第 2 步：打开配置向导
 
-需要 Python 3.10+。**打开终端**（Windows 用 PowerShell，macOS 用 Terminal），`cd` 到项目根目录后运行：
+访问 **[配置向导](https://你的用户名.github.io/你的仓库名/)**（如果没开 GitHub Pages，可直接下载 `docs/index.html` 用浏览器打开）。
 
-```powershell
-# Windows PowerShell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+向导会引导你填四项信息：
 
-# macOS / Linux
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-```
+1. **微信扫码授权** — 点按钮打开授权页，用本人微信扫码
+2. **粘贴凭据** — 从浏览器 Cookie 里复制 `openid`、`accesstoken`、`refreshtoken`
+3. **填宿舍坐标** — 必须现场取，向导会实时算出是否在围栏内
+4. **填学号密码** — 统一身份认证的账号，顺便取浏览器指纹
 
-先跑一次离线自检，确认协议实现正常（38 项，不联网、不需要账号）。**继续在终端里运行**：
+填完后点「生成配置」，得到两段 JSON。
 
-```powershell
-.\.venv\Scripts\python.exe -m uestc_wx.cli selftest
-```
+#### 微信凭据怎么取
 
-看到 `OK` 就对了。
+扫码完成后，在授权页按 F12：
 
-### 第 2 步：扫码拿微信授权凭据
+1. Application（应用程序）→ 左侧 Cookies → 点开 `static.pc.yyb.qq.com`
+2. 找到 `openid`、`accesstoken`、`refreshtoken`，复制它们的 Value
 
-> **关于「终端」：** 本文中凡是 `powershell` 代码块，都要在你自己电脑上打开终端（Windows 用 PowerShell，macOS 用 Terminal）运行，而不是在浏览器里。运行前先 `cd` 到项目根目录。需要点网页的地方会明确写「浏览器」或「去 Actions 页面」。
+> **复制完立刻关掉那个授权页面。** 同一组凭据只能有一个客户端保活，页面开着会和自动任务互相挤掉。
 
-在**电脑浏览器**打开下面这个地址（注意核对域名是 `open.weixin.qq.com`，协议是 HTTPS）：
+#### 宿舍坐标怎么取
 
-```text
-https://open.weixin.qq.com/connect/qrconnect?appid=wxd44977328b36e647&redirect_uri=https%3A%2F%2Fyybadaccess.3g.qq.com%2Fpc_yyb%2Fpcyyb_oauth%3Flogin_type%3DWX&response_type=code&scope=snsapi_login,snsapi_runtime_pcsdk&state=web&fast_login=1&self_redirect=true
-```
-
-用**你本人的微信**扫码，手机上点确认。
-
-然后按 F12 打开开发者工具：
-
-1. 选 **Application（应用程序）** → 左侧 **Cookies** → 点开 `static.pc.yyb.qq.com`
-2. 找到这四项，复制它们的 Value：`openid`、`accesstoken`、`refreshtoken`、`expires_in`
-
-> `expires_in` 是**剩余秒数**（常见 7200），不是时间戳。下面的向导会自动换算。
-
-**复制完立刻关掉这个授权页面。** 同一组凭据只能有一个客户端保活，页面开着会和后续的自动任务互相挤掉线。
-
-用向导生成配置文件。**回到终端运行**，把 `owXXXX` 等替换成你刚才复制的真实值：
-
-```powershell
-.\.venv\Scripts\python.exe tools/setup_wizard.py creds `
-  --openid owXXXX `
-  --access 1_XXXX `
-  --refresh 1_XXXX `
-  --expires-in 7200
-```
-
-它只显示长度和文件名，不回显凭据内容。
-
-> **向导是干什么的：** `tools/setup_wizard.py` 是配置助手，只在准备阶段用一次，打卡运行时不需要它。它解决三个手工容易出错的地方：① `expires_in` 是剩余秒数，它会自动换算成绝对时间；② 坐标会算出距打卡点中心的距离，超出围栏当场告警；③ Secret 内容导成干净的 txt，避免手抄漏字符。你可以跳过它纯手工写 JSON，但上述三个坑要自己留意。
-
-### 第 3 步：填你的宿舍坐标
-
-**必须在宿舍现场取。** 围栏半径约 150 米，站在宿舍里取的值才可靠。
-
-在宿舍用浏览器打开 <https://jzsz.uestc.edu.cn/daily-checkin-h5/index.html?appId=294>，登录后：
+在宿舍用浏览器打开 <https://jzsz.uestc.edu.cn/daily-checkin-h5/index.html?appId=294> 并登录：
 
 1. F12 → **Network（网络）**
 2. 过滤框输入 `reverse`
-3. 找到 `map/reverse?lat=...&lng=...` 这条请求，URL 里的 `lat` 和 `lng` 就是你的坐标
+3. 找到 `map/reverse?lat=...&lng=...`，URL 里的 `lat` 和 `lng` 就是坐标
 
-取到坐标后，**在终端里运行**（把经纬度换成你自己的）：
-
-```powershell
-.\.venv\Scripts\python.exe tools/setup_wizard.py profile `
-  --lat 30.7544 --lng 103.9346 --address 四川省成都市郫都区
-```
-
-向导会自动算出距打卡点中心的距离，超出 150 米会提示你重取。
-
-### 第 4 步：配 GitHub Secrets
-
-先验证一遍配置。**在终端里运行**（`--online` 会真的访问应用宝接口，确认凭据可用）：
-
-```powershell
-.\.venv\Scripts\python.exe tools/setup_wizard.py verify --online
-```
-
-看到 `"ok": true` 就好。
-
-然后导出可直接粘贴的文本。**继续在终端里运行**：
-
-```powershell
-.\.venv\Scripts\python.exe tools/setup_wizard.py export
-```
-
-它会生成 `.secrets-export/` 目录，里面两个 txt 文件分别是两个 Secret 的内容。
-
-去你的仓库 **Settings → Secrets and variables → Actions → New repository secret**，逐个添加：
-
-| Secret 名称 | 值 |
-| --- | --- |
-| `YYB_CREDENTIALS_JSON` | `YYB_CREDENTIALS_JSON.txt` 的全文 |
-| `CHECKIN_PROFILE_JSON` | `CHECKIN_PROFILE_JSON.txt` 的全文 |
-| `STUDENT_ID` | 你的学号 |
-| `STUDENT_PASSWORD` | 统一身份认证密码 |
-| `BROWSER_FINGERPRINT` | 见下方说明 |
-| `CREDENTIALS_PAT` | 见下方说明，**这个不能省** |
-
-导出的两个文件用记事本打开、全选复制、粘贴即可。**不要贴到聊天、Issue 或截图里。** 配完删掉 `.secrets-export/` 目录。
+向导会自动算出你离打卡点中心多少米，超出 150 米会提示重取。
 
 #### 浏览器指纹怎么取
 
-它决定 CAS 登录是否要短信验证。
-
-用你**平时打卡的那个浏览器**，登录 <https://jzsz.uestc.edu.cn/>，然后：
+决定 CAS 登录要不要短信验证。用你**平时打卡的那个浏览器**登录 <https://jzsz.uestc.edu.cn/>：
 
 1. F12 → Application → Cookies → `https://idas.uestc.edu.cn`
 2. 找 `MULTIFACTOR_BROWSER_FINGERPRINT`，复制 32 位十六进制值
 
 它是 HttpOnly，`document.cookie` 看不到，必须用 Application 面板。
 
-> 如果登录时弹了二次验证，勾选「信任此浏览器」再通过，之后这个指纹才会被服务端认作可信设备。
+> 如果登录时弹了二次验证，勾选「信任此浏览器」再通过，之后这个指纹才会被认作可信设备。
 
-#### `CREDENTIALS_PAT` 为什么必须配
+### 第 3 步：添加两个 Secrets
 
-微信的 `refresh_token` 大约每 2 小时轮换一次，新值只存在于当次运行的 runner 里。runner 跑完就销毁，如果不把新值写回 Secret，下一轮拿到的就是已经作废的旧 token，然后整条链断掉。
+去仓库 **Settings → Secrets and variables → Actions → New repository secret**，添加两个：
 
-配置方法：
+| Secret 名称 | 值 |
+| --- | --- |
+| `CHECKIN_CONFIG` | 向导生成的第一个 JSON（微信凭据 + 坐标） |
+| `CAS_ACCOUNT` | 向导生成的第二个 JSON（学号 / 密码 / 指纹） |
 
-1. 右上角头像 → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate new token
-2. Repository access → Only select repositories → 只选你这个打卡仓库
-3. Repository permissions → 找到 **Secrets** → 设为 **Read and write**
-4. 生成后复制，存为 Secret `CREDENTIALS_PAT`
+就这两个，没有别的了。
 
-> 是 **Secrets** 权限，不是 Actions。选错了会在几天后静默失效。
+**不需要创建 PAT。** 微信的 `refresh_token` 会轮换，本项目用 GitHub Actions 的 cache 保存新值，不依赖额外权限。缓存丢失时会回落到 Secret 里的初始凭据，只要 refresh token 还有效就能自愈。
 
-### 第 5 步：验证并启用
+> 向导生成的 JSON 里 `expires_at` 是 `0`，这是有意的：首次运行时程序会自动刷新凭据并写入缓存，你不需要做任何时间换算。
 
-去 **Actions → Daily check-in → Run workflow**，依次跑这三步：
+### 第 4 步：验证并配置定时
 
-**① mode 选 `validate`** — 只跑离线自检，不碰平台。绿了就说明代码和环境正常。
+去 **Actions → Daily check-in → Run workflow**，依次跑：
 
-**② mode 选 `ticket`** — 真实取码换票，但**不提交打卡**。成功会输出 `ticketLength: 43`。白天也能跑，不消耗打卡机会。
+**① mode 选 `validate`** — 只跑离线自检，不碰平台。绿了说明代码和环境正常。
+
+**② mode 选 `ticket`** — 真实取码换票，但**不提交打卡**。成功输出 `ticketLength: 43`。白天也能跑，不消耗打卡机会。
 
 **③ mode 选 `submit`** — 必须在 **21:00–23:30** 之间跑，这才真正打卡。
 
-之后就交给定时任务了。
+三步都通过后，配置外部定时触发，见下节。
 
-#### 重要：GitHub 的 schedule 不可靠，必须配外部触发
+### 第 5 步：配置外部定时触发
+
+#### 重要：GitHub 的 schedule 不可靠
 
 GitHub 的 `schedule` 是 **best-effort**，不保证执行。实测数据：
 
@@ -292,13 +221,13 @@ GitHub → Settings → Developer settings → Fine-grained tokens → Generate 
 
 | 现象 | 原因与处理 |
 | --- | --- |
-| `Missing secrets: ...` | 有 Secret 没配，看提示补上 |
-| `persisted: false, error: public-key HTTP 401` | `CREDENTIALS_PAT` 权限不对或过期，重做一个 |
-| `persisted: false, reason: GH_TOKEN ... missing` | `CREDENTIALS_PAT` 这个 Secret 根本没加 |
+| `Missing secrets: ...` | 有 Secret 没配，看提示补上（只有两个：`CHECKIN_CONFIG`、`CAS_ACCOUNT`） |
+| `config missing openid/access_token` | `CHECKIN_CONFIG` 内容不完整，用向导重新生成 |
+| `cas config missing student_id` | `CAS_ACCOUNT` 内容不完整，用向导重新生成 |
 | `refresh rejected` / `403` 反复出现 | 微信授权失效，重新扫码走第 2 步 |
-| `cas_login` 返回 401 | `STUDENT_PASSWORD` 不对，或密码改过了 |
-| 打卡被判异常 / 距离过大 | 坐标不在围栏内，回宿舍重取；确认 `profile.json` 的坐标 |
-| 定时任务不跑 | 检查仓库 Actions 是否被停用；公开仓库连续 60 天无活动会被自动停用 |
+| `cas_login` 返回 401 | 密码不对，或改过密码没更新 `CAS_ACCOUNT` |
+| 打卡被判异常 / 距离过大 | 坐标不在围栏内，回宿舍重取 |
+| 定时任务不跑 | 检查 cron-job.org 任务是否启用；检查 Actions 是否被停用 |
 | `ticket_rejected` | 学校 Cookie 和微信账号不是同一个人，或票据过期 |
 
 ---
@@ -342,13 +271,37 @@ uestc_wx/
   mmtls.py      连接编排：握手 → ManualAuth → 0-RTT 取码
   yyb.py        应用宝 HTTPS：凭据刷新 + login_buffer
   platform.py   CAS 登录、门户预热、两段式换票、打卡提交
-  flow.py       主流程编排
-  persist.py    轮换凭据回写 GitHub Secret
+  flow.py       主流程编排 + 配置加载
   cli.py        命令行入口
+docs/
+  index.html    网页配置向导（纯前端，可直接用浏览器打开）
 tools/
-  setup_wizard.py  配置向导（生成、校验、导出配置文件）
+  setup_wizard.py   本地配置向导（可选，命令行版）
+  trigger_helper.py 生成外部定时触发配置
 tests/
-  test_vectors.py  38 项黄金向量对拍（离线，无需账号）
+  test_vectors.py   38 项黄金向量对拍（离线，无需账号）
+```
+
+---
+
+## 本地工具（可选）
+
+纯云端部署不需要装任何东西。以下工具只在需要排查问题时用：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m uestc_wx.cli selftest
+```
+
+`selftest` 在 CI 里每次都会跑，本地跑只是确认环境正常。真正的价值在于：打卡失败时本地能立刻看到完整 traceback、能改代码重试，比对着 Actions 日志猜快得多。
+
+本地调试完整流程：
+
+```powershell
+# 用网页向导生成的两个 JSON 存为 config.json 和 cas.json
+.\.venv\Scripts\python.exe -m uestc_wx.cli ticket --config config.json
+.\.venv\Scripts\python.exe -m uestc_wx.cli checkin --config config.json --cas-config cas.json --dry-run
 ```
 
 ---

@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UESTC 自动打卡 · 配置向导</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #171a21;
+    --card2: #1e222b;
+    --border: #2a2f3a;
+    --text: #e6e9ef;
+    --muted: #9aa3b2;
+    --accent: #4c8dff;
+    --ok: #35c07a;
+    --warn: #e0a038;
+    --err: #e05a5a;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f5f7fa;
+      --card: #ffffff;
+      --card2: #f0f3f8;
+      --border: #dfe4ec;
+      --text: #1a1d24;
+      --muted: #5f6b7d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 16px 80px;
+    background: var(--bg); color: var(--text);
+    font: 15px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI",
+          "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 6px; }
+  .sub { color: var(--muted); margin: 0 0 28px; font-size: 14px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 22px; margin-bottom: 18px;
+  }
+  .card h2 {
+    font-size: 16px; margin: 0 0 4px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .num {
+    display: inline-flex; width: 24px; height: 24px; flex: 0 0 24px;
+    align-items: center; justify-content: center;
+    background: var(--accent); color: #fff;
+    border-radius: 50%; font-size: 13px; font-weight: 600;
+  }
+  .hint { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  label { display: block; margin: 14px 0 6px; font-size: 13px; font-weight: 500; }
+  .req { color: var(--err); }
+  .opt { color: var(--muted); font-weight: 400; }
+  input {
+    width: 100%; padding: 10px 12px;
+    background: var(--card2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    font: inherit; font-size: 14px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
+  button {
+    font: inherit; font-weight: 500; cursor: pointer;
+    padding: 10px 18px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--card2);
+    color: var(--text); transition: .15s;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { filter: brightness(1.1); }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+  pre {
+    background: var(--card2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px; overflow-x: auto;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 13px; line-height: 1.55; margin: 12px 0 0;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  .status {
+    margin-top: 12px; padding: 10px 14px; border-radius: 8px;
+    font-size: 13px; display: none;
+  }
+  .status.show { display: block; }
+  .status.ok { background: rgba(53,192,122,.12); border: 1px solid var(--ok); color: var(--ok); }
+  .status.warn { background: rgba(224,160,56,.12); border: 1px solid var(--warn); color: var(--warn); }
+  .status.err { background: rgba(224,90,90,.12); border: 1px solid var(--err); color: var(--err); }
+  .note {
+    border-left: 3px solid var(--warn); padding: 10px 14px;
+    background: rgba(224,160,56,.08); border-radius: 0 8px 8px 0;
+    font-size: 13px; margin: 14px 0 0; color: var(--text);
+  }
+  .note.info { border-color: var(--accent); background: rgba(76,141,255,.08); }
+  code {
+    background: var(--card2); padding: 2px 6px; border-radius: 4px;
+    font-family: ui-monospace, Consolas, monospace; font-size: .92em;
+  }
+  a { color: var(--accent); }
+  .inline-code {
+    display: block; margin: 8px 0; padding: 8px 10px;
+    background: var(--card2); border-radius: 6px;
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 12px; word-break: break-all; border: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>UESTC 自动打卡 · 配置向导</h1>
+  <p class="sub">
+    填写下面的信息，生成两个 GitHub Secret 的值。全部在浏览器本地处理，
+    不上传任何数据。
+  </p>
+
+  <!-- 步骤 1 -->
+  <section class="card">
+    <h2><span class="num">1</span>微信扫码授权</h2>
+    <p class="hint">
+      先点下面的按钮打开授权页，用你本人的微信扫码确认。
+    </p>
+    <div class="actions">
+      <button class="primary" id="openAuth">打开微信授权页</button>
+    </div>
+    <div class="note">
+      <strong>扫码完成后，回到授权页按 F12：</strong><br>
+      Application（应用程序）→ Cookies → 点开 <code>static.pc.yyb.qq.com</code><br>
+      复制 <code>openid</code>、<code>accesstoken</code>、<code>refreshtoken</code> 三项的值，填到下面。
+      <br><br>
+      <strong>复制完立刻关闭那个授权页面。</strong>同一组凭据只能有一个客户端保活。
+    </div>
+  </section>
+
+  <!-- 步骤 2 -->
+  <section class="card">
+    <h2><span class="num">2</span>填写凭据</h2>
+    <p class="hint">从浏览器 Cookie 里复制出来的三项。</p>
+    <label>openid <span class="req">*</span></label>
+    <input id="openid" placeholder="ow..." autocomplete="off" spellcheck="false">
+    <label>accesstoken <span class="req">*</span></label>
+    <input id="access" placeholder="1_..." autocomplete="off" spellcheck="false">
+    <label>refreshtoken <span class="req">*</span></label>
+    <input id="refresh" placeholder="1_..." autocomplete="off" spellcheck="false">
+  </section>
+
+  <!-- 步骤 3 -->
+  <section class="card">
+    <h2><span class="num">3</span>宿舍坐标</h2>
+    <p class="hint">
+      必须<strong>在宿舍现场</strong>取。围栏半径约 150 米，站在宿舍里取的值才可靠。
+    </p>
+    <div class="note info">
+      取法：在宿舍用浏览器打开
+      <a href="https://jzsz.uestc.edu.cn/daily-checkin-h5/index.html?appId=294"
+         target="_blank" rel="noopener">晚安成电页面</a> 并登录 → F12 →
+      Network → 过滤 <code>reverse</code> → 找到
+      <code>map/reverse?lat=...&amp;lng=...</code>，URL 里的数字就是坐标。
+    </div>
+    <div class="row">
+      <div>
+        <label>纬度 latitude <span class="req">*</span></label>
+        <input id="lat" placeholder="例如 30.75" inputmode="decimal">
+      </div>
+      <div>
+        <label>经度 longitude <span class="req">*</span></label>
+        <input id="lng" placeholder="例如 103.93" inputmode="decimal">
+      </div>
+    </div>
+    <label>地址（建议填写） <span class="opt">选填</span></label>
+    <input id="addr" placeholder="四川省成都市郫都区">
+    <div class="status" id="distStatus"></div>
+  </section>
+
+  <!-- 步骤 4 -->
+  <section class="card">
+    <h2><span class="num">4</span>统一身份认证</h2>
+    <p class="hint">打卡平台登录用。</p>
+    <label>学号 <span class="req">*</span></label>
+    <input id="sid" placeholder="你的学号" autocomplete="off" spellcheck="false">
+    <label>密码 <span class="req">*</span></label>
+    <input id="pwd" type="password" autocomplete="off">
+    <label>浏览器指纹 <span class="opt">建议填写</span></label>
+    <input id="fp" placeholder="32 位十六进制" autocomplete="off" spellcheck="false">
+    <div class="note info">
+      指纹决定登录时要不要短信验证。用<strong>平时打卡的那个浏览器</strong>登录
+      <a href="https://jzsz.uestc.edu.cn/" target="_blank" rel="noopener">jzsz.uestc.edu.cn</a>，
+      然后 F12 → Application → Cookies → <code>https://idas.uestc.edu.cn</code> →
+      找 <code>MULTIFACTOR_BROWSER_FINGERPRINT</code>。
+      它是 HttpOnly，<code>document.cookie</code> 看不到。
+    </div>
+  </section>
+
+  <!-- 步骤 5 -->
+  <section class="card">
+    <h2><span class="num">5</span>生成 Secrets</h2>
+    <p class="hint">
+      点击生成后，把两段内容分别添加到 GitHub 仓库的 Secrets。
+    </p>
+    <div class="actions">
+      <button class="primary" id="generate">生成配置</button>
+      <button id="clear">清空</button>
+    </div>
+    <div class="status" id="genStatus"></div>
+
+    <div id="output" style="display:none">
+      <label style="margin-top:20px">Secret 名称：<code>CHECKIN_CONFIG</code></label>
+      <pre id="outConfig"></pre>
+      <div class="actions">
+        <button id="copyConfig">复制 CHECKIN_CONFIG</button>
+        <button id="downloadConfig">下载为文件</button>
+      </div>
+
+      <label style="margin-top:24px">Secret 名称：<code>CAS_ACCOUNT</code></label>
+      <pre id="outCas"></pre>
+      <div class="actions">
+        <button id="copyCas">复制 CAS_ACCOUNT</button>
+        <button id="downloadCas">下载为文件</button>
+      </div>
+
+      <div class="note">
+        <strong>怎么添加：</strong><br>
+        打开你的仓库 → Settings → Secrets and variables → Actions →
+        New repository secret，名称照上面填，值粘贴对应内容。<br><br>
+        <strong>不要再把它们粘贴到聊天、Issue 或截图里。</strong>
+        生成完成后建议点「清空」清除页面上的明文。
+      </div>
+    </div>
+  </section>
+
+  <p class="sub" style="text-align:center;margin-top:36px">
+    所有计算都在你的浏览器里完成，页面不联网、不上传。
+  </p>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // QR Connect 授权地址
+  var AUTH_URL = "https://open.weixin.qq.com/connect/qrconnect" +
+    "?appid=wxd44977328b36e647" +
+    "&redirect_uri=https%3A%2F%2Fyybadaccess.3g.qq.com%2Fpc_yyb%2Fpcyyb_oauth%3Flogin_type%3DWX" +
+    "&response_type=code" +
+    "&scope=snsapi_login,snsapi_runtime_pcsdk" +
+    "&state=web&fast_login=1&self_redirect=true";
+
+  // 打卡点中心（用于计算距离是否在围栏内）
+  var CENTER_LAT = 30.7549800;
+  var CENTER_LNG = 103.9338830;
+  var RADIUS_METER = 150;
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function haversine(lat1, lng1, lat2, lng2) {
+    var R = 6371000;
+    var toRad = Math.PI / 180;
+    var p1 = lat1 * toRad, p2 = lat2 * toRad;
+    var dp = (lat2 - lat1) * toRad;
+    var dl = (lng2 - lng1) * toRad;
+    var a = Math.sin(dp / 2) * Math.sin(dp / 2) +
+            Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  function setStatus(el, kind, text) {
+    el.className = "status show " + kind;
+    el.textContent = text;
+  }
+
+  function clearStatus(el) {
+    el.className = "status";
+    el.textContent = "";
+  }
+
+  // 坐标输入时实时算距离
+  function updateDistance() {
+    var el = $("distStatus");
+    var lat = parseFloat($("lat").value);
+    var lng = parseFloat($("lng").value);
+    if (!isFinite(lat) || !isFinite(lng)) { clearStatus(el); return; }
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      setStatus(el, "err", "坐标超出合法范围，请检查。");
+      return;
+    }
+    var d = haversine(lat, lng, CENTER_LAT, CENTER_LNG);
+    var text = "距打卡点中心 " + d.toFixed(1) + " 米（围栏约 " +
+               RADIUS_METER + " 米）";
+    if (d < RADIUS_METER) {
+      setStatus(el, "ok", text + " · 在范围内");
+    } else {
+      setStatus(el, "err", text + " · 超出范围，请回宿舍重取");
+    }
+  }
+
+  $("lat").addEventListener("input", updateDistance);
+  $("lng").addEventListener("input", updateDistance);
+
+  // 打开授权页
+  $("openAuth").addEventListener("click", function () {
+    window.open(AUTH_URL, "_blank", "noopener");
+  });
+
+  function buildSecrets() {
+    var errors = [];
+    var openid = $("openid").value.trim();
+    var access = $("access").value.trim();
+    var refresh = $("refresh").value.trim();
+    var latRaw = $("lat").value.trim();
+    var lngRaw = $("lng").value.trim();
+    var addr = $("addr").value.trim();
+    var sid = $("sid").value.trim();
+    var pwd = $("pwd").value;
+    var fp = $("fp").value.trim();
+
+    if (!openid) errors.push("openid 不能为空");
+    if (!access) errors.push("accesstoken 不能为空");
+    if (!refresh) errors.push("refreshtoken 不能为空");
+    if (!latRaw) errors.push("纬度不能为空");
+    if (!lngRaw) errors.push("经度不能为空");
+    if (!sid) errors.push("学号不能为空");
+    if (!pwd) errors.push("密码不能为空");
+
+    var lat = parseFloat(latRaw);
+    var lng = parseFloat(lngRaw);
+    if (latRaw && !isFinite(lat)) errors.push("纬度不是有效数字");
+    if (lngRaw && !isFinite(lng)) errors.push("经度不是有效数字");
+    if (isFinite(lat) && (lat < -90 || lat > 90)) errors.push("纬度超出范围");
+    if (isFinite(lng) && (lng < -180 || lng > 180)) errors.push("经度超出范围");
+
+    if (fp && !/^[0-9A-Fa-f]{32}$/.test(fp)) {
+      errors.push("浏览器指纹应为 32 位十六进制");
+    }
+
+    if (errors.length) return { errors: errors };
+
+    var config = {
+      openid: openid,
+      access_token: access,
+      refresh_token: refresh,
+      expires_at: 0,
+      latitude: lat,
+      longitude: lng
+    };
+    if (addr) config.reverseGeocode = addr;
+
+    var cas = {
+      student_id: sid,
+      password: pwd
+    };
+    if (fp) cas.fingerprint = fp;
+
+    var warnings = [];
+    if (!addr) warnings.push("未填地址，部分情况下可能被判异常记录，建议补上");
+    if (!fp) warnings.push("未填指纹，CAS 登录可能要求短信验证");
+    var d = haversine(lat, lng, CENTER_LAT, CENTER_LNG);
+    if (d >= RADIUS_METER) {
+      warnings.push("坐标距中心 " + d.toFixed(0) + " 米，超出围栏");
+    }
+
+    return {
+      config: JSON.stringify(config, null, 2),
+      cas: JSON.stringify(cas, null, 2),
+      warnings: warnings
+    };
+  }
+
+  $("generate").addEventListener("click", function () {
+    var result = buildSecrets();
+    var status = $("genStatus");
+    if (result.errors) {
+      setStatus(status, "err", result.errors.join("；"));
+      $("output").style.display = "none";
+      return;
+    }
+    $("outConfig").textContent = result.config;
+    $("outCas").textContent = result.cas;
+    $("output").style.display = "block";
+
+    if (result.warnings.length) {
+      setStatus(status, "warn", result.warnings.join("；"));
+    } else {
+      setStatus(status, "ok", "生成完成，按下面的说明添加到 GitHub Secrets。");
+    }
+  });
+
+  function copyText(text, button) {
+    var original = button.textContent;
+    function done() {
+      button.textContent = "已复制";
+      setTimeout(function () { button.textContent = original; }, 1500);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () {
+        fallbackCopy(text, done);
+      });
+    } else {
+      fallbackCopy(text, done);
+    }
+  }
+
+  function fallbackCopy(text, done) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); done(); }
+    catch (e) { alert("复制失败，请手动选中文本复制"); }
+    finally { document.body.removeChild(ta); }
+  }
+
+  $("copyConfig").addEventListener("click", function () {
+    copyText($("outConfig").textContent, this);
+  });
+  $("copyCas").addEventListener("click", function () {
+    copyText($("outCas").textContent, this);
+  });
+
+  function download(name, text) {
+    var blob = new Blob([text], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  $("downloadConfig").addEventListener("click", function () {
+    download("CHECKIN_CONFIG.json", $("outConfig").textContent);
+  });
+  $("downloadCas").addEventListener("click", function () {
+    download("CAS_ACCOUNT.json", $("outCas").textContent);
+  });
+
+  $("clear").addEventListener("click", function () {
+    ["openid", "access", "refresh", "lat", "lng", "addr", "sid", "pwd", "fp"]
+      .forEach(function (id) { $(id).value = ""; });
+    $("output").style.display = "none";
+    clearStatus($("genStatus"));
+    clearStatus($("distStatus"));
+  });
+})();
+</script>
+</body>
+</html>
