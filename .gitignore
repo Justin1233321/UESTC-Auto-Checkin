@@ -14,11 +14,13 @@ profile.json
 .secrets-export/
 *.tmp
 
-# 调试时临时拉取的 GitHub API 响应
+# 调试时临时拉取的 GitHub API 响应与日志
 wf.json
+wf*.json
 runs.json
-runs2.json
+runs*.json
 jobs.json
-logs.zip
+repos.json
 dispatch.json
+logs.zip
 logx/
