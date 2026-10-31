@@ -158,6 +158,20 @@
       <br><br>
       <strong>复制完立刻关闭那个授权页面。</strong>同一组凭据只能有一个客户端保活。
     </div>
+
+    <figure>
+      <img src="assets/yyb-cookies.jpg"
+           alt="在 DevTools 的 Application 面板中查看 static.pc.yyb.qq.com 的 Cookie">
+      <figcaption>
+        上图：扫码完成后按 F12 → 顶部选「Application」→ 左侧「Cookie」→
+        点开 <code>static.pc.yyb.qq.com</code> → 右侧列表里红框中的三行就是需要的：
+        <code>accesstoken</code>、<code>openid</code>、<code>refreshtoken</code>
+        （图里的值已打码）。
+        <br>双击 Value 单元格即可复制。
+        <br><strong>注意域名。</strong>要选 <code>static.pc.yyb.qq.com</code>，
+        不是 <code>idas.uestc.edu.cn</code>——那个下面是指纹，第 4 步才用。
+      </figcaption>
+    </figure>
   </section>
 
   <!-- 步骤 2 -->
