@@ -24,6 +24,17 @@ class FlowError(Exception):
         self.detail = detail
 
 
+def _read_credentials_only(path: Path) -> yyb.OauthCredentials:
+    """只读凭据字段，不写 baseline、不要求位置字段（回退路径用）。"""
+    document = json.loads(path.read_text(encoding="utf-8"))
+    return yyb.OauthCredentials(
+        openid=str(document.get("openid", "")),
+        access_token=str(document.get("access_token", "")),
+        refresh_token=str(document.get("refresh_token", "")),
+        expires_at=int(document.get("expires_at", 0)),
+    )
+
+
 def load_config(path: Path) -> tuple[yyb.OauthCredentials, platform.CheckinProfile]:
     """读取合并配置（微信凭据 + 打卡位置）。
 
@@ -102,11 +113,27 @@ def save_credentials(path: Path, cred: yyb.OauthCredentials) -> None:
 
 
 def ensure_credentials(cred: yyb.OauthCredentials,
-                       path: Path) -> yyb.OauthCredentials:
-    """按需刷新凭据并把轮换结果持久化。"""
+                       path: Path,
+                       fallback_path: Path | None = None) -> yyb.OauthCredentials:
+    """按需刷新凭据并把轮换结果持久化。
+
+    fallback_path 用于「缓存凭据已失效」时回退：CI 里 config.json 可能来自
+    Actions cache（上一次运行轮换后的值）。若该值已被服务端作废（例如本地
+    也用过同一组凭据、或缓存写入失败），刷新会返回 -109 之类的拒绝。
+    此时若 Secret 里的初始凭据仍然有效，就能靠回退自愈，不必重新扫码。
+    """
     if not cred.needs_refresh():
         return cred
-    rotated = yyb.refresh_credentials(cred)
+    try:
+        rotated = yyb.refresh_credentials(cred)
+    except yyb.OauthError:
+        if fallback_path is None or not fallback_path.exists():
+            raise
+        fallback = _read_credentials_only(fallback_path)
+        if fallback.refresh_token == cred.refresh_token or not fallback.valid():
+            raise
+        # 回退到 Secret 里的初始凭据再试一次
+        rotated = yyb.refresh_credentials(fallback)
     save_credentials(path, rotated)
     return rotated
 
@@ -164,7 +191,10 @@ def run_checkin(student_id: str, password: str, fingerprint: str,
     }
     try:
         cred, profile = load_config(config_path)
-        cred = ensure_credentials(cred, config_path)
+        # Secret 原文另存为 config.secret.json，作为缓存失效时的回退源
+        fallback = config_path.with_name("config.secret.json")
+        cred = ensure_credentials(cred, config_path,
+                                  fallback if fallback.exists() else None)
 
         result["stage"] = "cas_login"
         client = platform.PlatformClient(user_agent=profile.user_agent)
@@ -210,7 +240,9 @@ def run_checkin(student_id: str, password: str, fingerprint: str,
                                 raise FlowError(
                                     "window_expired",
                                     f"waited {waited} minutes without entering window")
-                            cred = ensure_credentials(cred, config_path)
+                            cred = ensure_credentials(
+                                cred, config_path,
+                                fallback if fallback.exists() else None)
                             client.login(student_id, password, fingerprint)
                             client.warm_up_portal()
                             today = client.today_record()

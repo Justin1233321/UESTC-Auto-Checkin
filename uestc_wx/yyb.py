@@ -24,6 +24,13 @@ BUSINESS_ID = "pc_yyb_auth"
 ACCESS_KEY = "wgrdg373hy26ww2"
 TIMEOUT = 20
 
+# 刷新失败时给用户看的提示（实测常见码）
+_REFRESH_HINTS = {
+    -109: "refresh_token 已失效：可能已在别处轮换，或被扫码页面/其他客户端挤掉",
+    -106: "凭据格式或签名被拒",
+    11001: "openid 与 refresh_token 不匹配",
+}
+
 
 class OauthResult:
     OK = 0
@@ -115,8 +122,12 @@ def refresh_credentials(cred: OauthCredentials) -> OauthCredentials:
     }, separators=(",", ":"))
     document = _post_json(REFRESH_PATH, body, "")
     if document.get("code") != 0:
-        raise OauthError(OauthResult.REJECTED,
-                         f"refresh rejected code={document.get('code')}")
+        code = document.get("code")
+        hint = _REFRESH_HINTS.get(code)
+        detail = f"refresh rejected code={code}"
+        if hint:
+            detail += f" ({hint})"
+        raise OauthError(OauthResult.REJECTED, detail)
     user_info = document.get("user_info")
     if not isinstance(user_info, dict):
         raise OauthError(OauthResult.INVALID, "refresh response missing user_info")

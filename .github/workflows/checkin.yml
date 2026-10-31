@@ -86,6 +86,11 @@ jobs:
                   " (Settings -> Secrets and variables -> Actions)")
           (private / "cas.json").write_text(
               os.environ["CAS_ACCOUNT"], encoding="utf-8")
+          # Secret 原文始终另存一份，作为缓存凭据失效时的回退源。
+          # 缓存里的 refresh_token 可能已被轮换作废（-109），
+          # 而 Secret 里这份只要还没被用过就仍然有效。
+          (private / "config.secret.json").write_text(
+              os.environ["CHECKIN_CONFIG"], encoding="utf-8")
           # 若 cache 未恢复出 config.json，才用 Secret 里的初始值
           config_path = private / "config.json"
           if not config_path.exists():
@@ -93,7 +98,7 @@ jobs:
                   os.environ["CHECKIN_CONFIG"], encoding="utf-8")
               print("config from secret")
           else:
-              print("config from cache")
+              print("config from cache (secret kept as fallback)")
           PY
 
       - name: Run check-in
