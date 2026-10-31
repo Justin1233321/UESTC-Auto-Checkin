@@ -107,6 +107,27 @@
     font-family: ui-monospace, Consolas, monospace;
     font-size: 12px; word-break: break-all; border: 1px solid var(--border);
   }
+  figure { margin: 14px 0 0; }
+  figure img {
+    width: 100%; height: auto; display: block;
+    border: 1px solid var(--border); border-radius: 8px;
+    cursor: zoom-in;
+  }
+  figcaption {
+    color: var(--muted); font-size: 12px; margin-top: 6px;
+    line-height: 1.5;
+  }
+  /* 点击图片放大 */
+  #lightbox {
+    position: fixed; inset: 0; background: rgba(0,0,0,.85);
+    display: none; align-items: center; justify-content: center;
+    z-index: 999; padding: 24px; cursor: zoom-out;
+  }
+  #lightbox.show { display: flex; }
+  #lightbox img {
+    max-width: 100%; max-height: 100%;
+    border-radius: 8px; box-shadow: 0 8px 40px rgba(0,0,0,.6);
+  }
 </style>
 </head>
 <body>
@@ -133,6 +154,16 @@
       <br><br>
       <strong>复制完立刻关闭那个授权页面。</strong>同一组凭据只能有一个客户端保活。
     </div>
+
+    <figure>
+      <img src="assets/fingerprint.jpg" alt="在 Chrome 开发者工具的 Application 面板中查看 Cookie">
+      <figcaption>
+        上图：按 F12 打开开发者工具 → 顶部选「应用 / Application」→ 左侧「Cookie」→
+        点开 <code>idas.uestc.edu.cn</code> → 在列表中找到
+        <code>MULTIFACTOR_BROWSER_FINGERPRINT</code>（红框处），右侧 Value 就是指纹。
+        <br>取值时把鼠标移到 Value 上双击即可全选复制。
+      </figcaption>
+    </figure>
   </section>
 
   <!-- 步骤 2 -->
@@ -160,6 +191,18 @@
       Network → 过滤 <code>reverse</code> → 找到
       <code>map/reverse?lat=...&amp;lng=...</code>，URL 里的数字就是坐标。
     </div>
+
+    <figure>
+      <img src="assets/coordinates.jpg" alt="在 Network 面板中过滤 reverse 请求以读取经纬度">
+      <figcaption>
+        上图：打开打卡页面 → F12 → 「网络 / Network」→ 过滤框输入
+        <code>reverse</code> → 点开那条 <code>reverse?lat=…&amp;lng=…</code> 请求，
+        在 URL 里读 <code>lat</code> 和 <code>lng</code>。
+        <br>顺序是 <strong>纬度在前、经度在后</strong>，别写反。
+        建议多刷新几次页面，取出现次数最多的那组（浏览器定位可能漂移）。
+      </figcaption>
+    </figure>
+  </section>
     <div class="row">
       <div>
         <label>纬度 latitude <span class="req">*</span></label>
@@ -234,7 +277,14 @@
   <p class="sub" style="text-align:center;margin-top:36px">
     所有计算都在你的浏览器里完成，页面不联网、不上传。
   </p>
+  <p class="sub" style="text-align:center;font-size:12px;margin-top:8px">
+    截图取自
+    <a href="https://github.com/richard297779/UESTC-MoonCheck" target="_blank"
+       rel="noopener">UESTC-MoonCheck</a>（MIT），其中的 Cookie 值已打码。
+  </p>
 </div>
+
+<div id="lightbox"><img alt="放大查看"></div>
 
 <script>
 (function () {
@@ -445,6 +495,24 @@
     clearStatus($("genStatus"));
     clearStatus($("distStatus"));
   });
+
+  // 点击截图放大查看
+  (function () {
+    var box = $("lightbox");
+    var boxImg = box.querySelector("img");
+    var figures = document.querySelectorAll("figure img");
+    for (var i = 0; i < figures.length; i++) {
+      figures[i].addEventListener("click", function () {
+        boxImg.src = this.src;
+        boxImg.alt = this.alt;
+        box.classList.add("show");
+      });
+    }
+    box.addEventListener("click", function () { box.classList.remove("show"); });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") box.classList.remove("show");
+    });
+  })();
 })();
 </script>
 </body>
